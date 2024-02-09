@@ -1,0 +1,93 @@
+---
+title: "Simple Example for Geospatial Visualization"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%d %B, %Y')`"
+output: 
+  html_document: 
+    self_contained: yes
+---
+
+<!-- ## Libraries and settings -->
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width=10)
+
+library(sf)
+library(dplyr)
+library(ggplot2)
+library(viridis)
+```
+
+## German District Polygon map
+
+Source: https://sgx.geodatenzentrum.de/wfs_vg5000_1231; Deutsche Verwaltungsgebiete VG5000
+
+```{r}
+dtl <- st_read("data/vg5000_ebenen_0101/VG5000_KRS.shp")
+
+# Centered around Berlin EPSG:3068 (just for fun, because I grew up there)
+dtl_proj <- st_transform(dtl, crs = 3068)
+plot(dtl_proj["geometry"], axes = TRUE, graticule = st_crs(dtl))
+
+# There is not much data in the data, but we can color-code the different states
+ggplot(data = dtl_proj) +  
+  geom_sf(aes(fill = SN_L)) +
+  theme_minimal() 
+```
+
+## Agricultural businesses in Germany 1999 - 2007; 
+
+Source: https://www.regionalstatistik.de; table 41120-01-02-4; Landwirtschaftliche Betriebe und landwirtschaftlich genutzte Fläche (LF) n. Kulturarten - Erhebungsjahr - regionale Tiefe: Kreise und krfr. Städte
+
+```{r}
+dt <- read.csv("data/41120-01-02-4.csv", sep=";", skip=9, na.strings = c("-","."), 
+           col.names=c("year", "ARS", "name", "n_business", "ha_business", "n_farm", "ha_farm", "n_pcrop", "ha_pcrop", "n_grass", "ha_grass")) %>% 
+  filter(year != ",,") %>% 
+  # Factor handling 
+  mutate_if(is.character, factor, exclude = c("", NA)) 
+```
+
+## Visualization
+
+### Plot all agricultural data together
+
+In addition to the cities if Berlin and Hamburg, it looks like there are missings from two states in the north-east and east.
+
+```{r}
+dtl07 <- dt %>% 
+  # use 2007 data only
+  filter(year == "2007") %>% 
+  # match to map data
+  left_join(dtl, ., by ="ARS") 
+
+plot(dtl07[c("n_business", "ha_business", "n_farm", "ha_farm", "n_pcrop", "ha_pcrop", "n_grass", "ha_grass")], 
+     logz = TRUE, border = "darkgray")
+```
+
+### Plot farmland area over time
+
+No obvious changes over time, probably requires appropriate normalization
+
+```{r}
+plot_farmland <- function(i){
+
+  # subset data 
+  dt %>% filter(year == i) %>% 
+    # match to map data
+    left_join(dtl, ., by ="ARS") %>% 
+    # plot map
+    ggplot(data = .) +  
+    geom_sf(aes(fill = ha_farm/1000)) + scale_x_sqrt() +
+    labs(title = paste0("Farmland area in ",i)) + 
+    scale_fill_viridis() + theme_minimal()
+}
+
+pp <- lapply(levels(dt$year), plot_farmland)
+ggpubr::ggarrange(plotlist=pp, legend= "right", common.legend = TRUE)
+```
+
+# Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
