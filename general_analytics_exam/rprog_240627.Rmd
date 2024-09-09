@@ -1,0 +1,351 @@
+---
+title: "General Data Science Analytics Exam"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%Y-%m-%d')`"
+output: github_document
+---
+
+# Initialization
+
+## Libraries and settings
+
+```{r, message=FALSE, warning=FALSE}
+# Load libraries 
+library(tidyverse)
+library(dplyr)
+library(stringr)
+
+library(viridis)
+library(gt)
+library(gtsummary)
+
+library(recipes)
+library(tidymodels)
+library(glmnet)
+```
+
+## Helper Funtions
+
+```{r}
+# Helper function to combine binary variable into one categorical factor
+combine_fct <- function(data, x){
+  #'@param data <- dt2 ... data frame
+  #'@param x <- "ethnicity" ... group of binary variables selected by 'starts_with'
+  #' Be aware, this function is only fit for purpose and needs better testing
+  
+  dtx <- data %>% select(starts_with(x)) 
+  nn <- colnames(dtx) %>% str_split_i("_",2)
+  data[,x] <- data.frame(dtx %>% interaction() %>% droplevels() %>% factor(labels = nn))
+  return(data)
+}
+```
+
+## Read and Prepare Data 
+
+### County-level Data 
+
+```{r}
+tx_smry <- read.csv("Data Exam 2023 Data/tx_county_summary.csv", sep=",") %>% 
+  rename(idn = censuskey)
+rgn <- read.csv("Data Exam 2023 Data/county_to_media_region.csv", sep=",") %>% 
+  mutate(county_name = toupper(demo_county_name))
+tx_insr <- read.csv("Data Exam 2023 Data/tx_county_insurance_rates.csv", sep=",") %>% 
+  rename(idn = county)
+
+# combine data 
+tx_smry2 <- left_join(tx_smry, rgn, by = "county_name")
+tx_data <- left_join(tx_insr, tx_smry2, by = "idn") %>% 
+  mutate_if(is.character, as.factor)
+```
+
+<!-- ```{r} -->
+<!-- tx_data %>% select(c14_pct_hispanic, c14_pct_non_hispanic) %>% rowSums() %>% summary() -->
+<!-- tx_data %>% select(c14_pct_white, c14_pct_black, c14_pct_asian, c14_pct_multirace) %>% rowSums() %>% summary() -->
+<!-- tx_data %>% select(c14_pct_nohsdegree, c14_pct_hsdegree, c14_pct_somecollege, c14_pct_collegedegree) %>% rowSums() %>% summary() -->
+<!-- tx_data %>% select(c14_pct_publicschool, c14_pct_privateschool) %>% rowSums() %>% summary() -->
+<!-- ``` -->
+
+**Notes:**
+
+* Most Variables sum up to 100% (hispanic vs. non-hispanic, education variables, private vs. public school)
+* Race percentages do not sum up to 100%, i.e. must have 'others' category, 
+* Education variables seems to represent *highest* education
+
+### Add Map Information
+
+```{r, cache=TRUE}
+# Download shape file using 'tidycensus', which should work if located in the US
+# tx_map <- tidycensus::get_acs(state = "TX", geography = "county", variables = "B19013_001", year = 2023, geometry = TRUE)
+
+# This works outside the US !! make sure VPN is on!! 
+tx_map <- tigris::counties("TX", , progress_bar = FALSE) %>% mutate(idn = as.numeric(GEOID)) %>% 
+  left_join(., tx_data, by ="idn")
+```
+
+### Individual-Level Data
+
+```{r}
+## Training Data 
+dt_train <- read.csv("Data Exam 2023 Data/ds_test_training_dataset_2023.csv", 
+                     sep=",", na.strings = "") %>% 
+  head(., -1)  %>% # last row is corrupted 
+  # data wrangling 
+  mutate(health_insurance = factor(health_insurance) %>% relevel(ref = "Uninsured")) %>% 
+  mutate(level_of_education = factor(level_of_education) %>% relevel(ref = "no hs degree")) %>% 
+  mutate_at(.vars = c("age", "number_of_children", "has_children"), .fun = as.numeric) %>% 
+  mutate_at(.vars = c("is_homeowner", "is_renter", "has_a_cat"), .funs = ~as.numeric(. == "1")) %>% 
+  mutate(across(starts_with(c("gender_","maritalstatus", "religion", "donor","occupation","interests","purchases", "ethnicity")), ~as.numeric(. == "1"))) %>% 
+  # select variables of interest
+  select(health_insurance, gender, political_party, age, income,  
+         length_of_residence, number_of_children, level_of_education, 
+         is_homeowner, has_a_cat, # is_renter,
+         starts_with(c("gender","maritalstatus","religion","donor","occupation","interests","purchases", "ethnicity")))  
+
+## Test Data 
+dt_test <- read.csv("Data Exam 2023 Data/ds_test_houston_2023.csv", sep=",") %>% 
+    mutate_at(.vars = c("age", "number_of_children", "has_children"), .fun = as.numeric)
+
+```
+
+# Question 1
+
+Your Data Science has been doing some initial investigation into the data and presenting some initial findings. Two of your colleagues are disagreeing. One says Latinos are less likely to be insured, the other says that people with lower educational achievement are less likely to be insured. How would you explain your best answer to this question?
+
+## Descriptive Analysis 
+
+Get some initial insights into the data using different summaries and visualizations.
+
+<!-- # install.packages("skimr") <TODO> -->
+
+```{r}
+skimr::skim(tx_data)
+```
+
+### Spatial Variation 
+
+``` {r}
+# Variable of Interest: Insurance rates
+ggplot(data = tx_map) +  
+  geom_sf(aes(fill = pct.insurance)) +
+  labs(title = "Insurance Rates in Texas") + 
+  scale_fill_viridis() + theme_minimal() 
+
+# Covariate Latino
+ggplot(data = tx_map) +  
+  geom_sf(aes(fill = c14_pct_hispanic)) +
+  labs(title = "Percentage Latino, 2023") + 
+  scale_fill_viridis() + theme_minimal() 
+
+# Covariates for Education
+ed1 <- ggplot(data = tx_map) +  
+  geom_sf(aes(fill = c14_pct_nohsdegree)) +
+  labs(title = "No Highschool", fill="Percentage") +
+  scale_fill_viridis() + theme_minimal() 
+ed2 <- ggplot(data = tx_map) +  
+  geom_sf(aes(fill = c14_pct_hsdegree)) +
+  labs(title = "Highschool") + 
+  scale_fill_viridis() + theme_minimal() 
+ed3 <- ggplot(data = tx_map) +  
+  geom_sf(aes(fill = c14_pct_somecollege)) +
+  labs(title = "Some College") + 
+  scale_fill_viridis() + theme_minimal() 
+ed4 <- ggplot(data = tx_map) +  
+  geom_sf(aes(fill = c14_pct_collegedegree)) +
+  labs(title = "College Degree") + 
+  scale_fill_viridis() + theme_minimal() 
+ggpubr::ggarrange(plotlist=list(ed1, ed2, ed3, ed4), legend= "right", common.legend = TRUE)
+```
+
+**Conclusion:** 
+
+* There is quite some spatial variation in the variables of interest that needs to be considered
+
+### Correlation Analysis
+
+Exploration of correlation between covariates
+
+```{r, message=FALSE}
+tx_data %>%
+  select(pct.insurance, n_adults, starts_with("c14")) %>% 
+  cor() %>% 
+  ggcorrplot::ggcorrplot(., hc.order = TRUE, type = "lower", outline.color = "white", pch.cex = 1, tl.cex=7)
+
+# selected covariates
+tx_data %>% 
+  select(tx_media_region, pct.insurance, c14_pct_hispanic, c14_pct_nohsdegree) %>% 
+  GGally::ggpairs(ggplot2::aes(color=stringr::str_split_i(tx_media_region, " ", 1)))
+```
+
+**Conclusions:** 
+
+
+* It looks like there is a quite strong correlation between percentage of Latinos and percentage without high school degree in a county. 
+* Other Variables such as median income and no highschool degree, or population density and multitentant housing correlate as well . 
+* There is also some spatial variation that needs to be considered
+
+**Comments of statistical caution:** 
+
+* Statistical significance in the correlation analysis is only meant to be used for exploration, statistical inference conclusions require multiple testing adjustments
+
+## Some Exploratory Regression Analyses
+
+### Using County-Level Data
+
+Running a simple linear regression using demographics using county-level data.
+
+```{r}
+# Full model for sensitivity analysis only 
+# m1 <- tx_data %>% 
+#    select(pct.insurance, n_adults, starts_with("c14")) %>% 
+#    lm(pct.insurance ~ ., data = .) 
+ 
+# Subset of covariates that are relevant for the question of interest
+m2 <- tx_data %>% 
+  select(pct.insurance, n_adults, c14_pop_density_sqmile, tx_media_region, c14_median_income, 
+         c14_pct_hispanic, c14_pct_white, c14_pct_black, c14_pct_asian, c14_pct_multirace, 
+         c14_pct_nohsdegree, c14_pct_hsdegree, c14_pct_somecollege, c14_pct_collegedegree, 
+         c14_pct_privateschool) %>% 
+  lm(I(pct.insurance*100) ~ ., data = .) 
+
+tbl_regression(m2)
+par(mfrow=c(2,2)); plot(m2) # model checks look alright 
+```
+
+**Conclusions:** 
+
+From the multivariable model using the county-level data, we see that both variables, high proportion of Latinos and no highschool, may have some effect on the insurance rate in the county. When controlling for both effects in the same model, it seems that ethnicity may have a stronger effect.
+
+**Comments of statistical caution:** 
+
+* Ecological fallacy: It is important to point out that a county/group-level relationship does not automatically characterize the relationship at the level of the individual. Thus, districts with higher rate of Latinos tend to have higher rate of insurance. It is wrong to conclude that Latinos are the ones with/without insurance. A conclusion like that requires analysis at the individual level
+
+* Base ratio fallacy: Note that using ratios in regression analysis can lead to incorrect or misleading conclusions, because it ignores the base rate/general prevalence.
+
+### Individual-Level data 
+
+Running a simple logistic regression using demographics at indidividual level.
+
+```{r, warning=FALSE}
+# Simple logistic regression modelling n individual level
+m3 <- dt_train %>% 
+  combine_fct(., "ethnicity") %>% 
+  select(health_insurance, political_party, age, income,  
+         length_of_residence, number_of_children, level_of_education, ethnicity,  
+         starts_with(c("gender_", "maritalstatus","religion"))) %>% 
+  glm(I(health_insurance != "Uninsured") ~ ., data= ., family = "binomial")
+tbl_regression(m3, exp=TRUE)
+```
+
+**Conclusions**
+
+The multivariable model at the individual level confirms that both variables. Latinos and people without high school degree are less likely to be insured. Both variables are highly correlated. Additional analysis should consider spatial effects. 
+
+# ------------------------------------------------------------------------------
+# Question 2
+
+The company is now given the opportunity to expand into the Houston media market. For the sake of this exercise, assume no one in the Houston media market has insurance currently but their behaviors resemble that of the rest of the state. The county insurance rate table does include Houston media market counties but those can be ignored here. Using the data available to you, construct a targeting strategy to maximize the number of people that will receive insurance. You can assume that you will be able to do outreach at the individual level.
+
+There are two deliverables for this work. First, prepare release notes for internal stakeholders in your organization, including non-technical personnel. Please include relevant information on how to use the score effectively as well as any relevant validation. Separately include a file ranking the 2,500 provided people in the Houston media market for outreach.
+
+## Data Summary
+
+```{r}
+dt_train %>% 
+  tbl_summary(by = health_insurance, percent = "row") %>%  add_overall()
+```
+
+## Recursive Partitioning 
+
+Quick Exploration of possible predictors using recursive partitioning, which creates a decision tree that splits the population into subgroups based on several dichotomous decisions. This is a data-driven, simple assessment that mirrors human decision making and can be easily explained to non-technical audiences. 
+
+```{r}
+rpart_res <- dt_train %>% rpart::rpart(health_insurance ~ ., data=., model=TRUE)
+rpart.plot::rpart.plot(rpart_res, extra=104, type=5, box.palette=list("grey", "lightblue", "lightpink"))
+```
+
+**Conclusions:**
+
+Most relevant variables that predict the health insurance plan choice are: 
+1) person is having children (no/yes)
+2) length of residence (Less/more than 14 years)
+
+Based on this simple analysis, a construction of a targeting strategy to maximize the number of people that will receive insurance should include whether the person has children or not. If the person has residence for more than 14 years, they are likely to purchase health insurance. 
+
+## Machine Learning Modelling
+
+For more complex analysis, we apply machine learning modelling using tidymodels. 
+For multinomial classification regression different options are available: 
+
+```{r}
+show_engines("multinom_reg")
+```
+
+```{r, warning=FALSE}
+# Define recipe for multinomial regression
+dt_recipe <- dt_train %>% 
+  recipe(health_insurance ~ .) %>% 
+  # execute transformation
+  prep()
+train_dt <- juice(dt_recipe)
+
+# Apply pre-processing to test data 
+test_dt <- dt_test %>% 
+  bake(dt_recipe, new_data = .) %>% as.data.frame()
+```
+
+For illustration purposes, we choose elastic net regression as the penalization properties nicely allow variable selection. In the example on hand, this allows the construction of a simplified targeting score, i.e. including a small number of variables.  
+We choose the penalty to be 95% lasso and 5% weight decay via ridge. Thus we strongly focus on variable selection via lasso as it shrinks the model effects to zero so that their effect are entirely removed from the model. 
+
+```{r}
+# Model specification and fit 
+model_spec <- multinom_reg(mode = "classification", engine = "glmnet", 
+                           penalty = 0.05, mixture = 0.95)
+enet_fit <- model_spec %>% 
+  fit(health_insurance ~ ., data = train_dt)
+
+# Model coefficients 
+tidy(enet_fit) %>% select(-penalty) %>% 
+  filter(estimate != 0 & term != "(Intercept)") %>% 
+  gt() %>% fmt_number(decimals=3)
+```
+
+**Conclusions**: 
+
+* Number of children remains the most relevant variables to differentiate between Plan Blue and Red. Thus the targeted marketing strategy should focus on that factor
+* Additional variables that may explain decisions whether or not an insurance is chosen include: Length of residence, income, age and political party affilination as republican 
+
+**Comments of statistical caution:** 
+
+Model validation pending. More comprehensive analysis could result in a more refined model, which can be obtained by tuning of the model parameters. In addition, it is advised to conduct benchmarking with other approaches. 
+
+## Prediction for Houston media market
+
+```{r}
+pred <- bind_cols(
+  rpart_class = predict(rpart_res, dt_test, type = "class" ),
+  # predict(rpart_res, dt_test, type="prob")
+  predict(enet_fit, test_dt),
+  predict(enet_fit, test_dt, type = "prob")
+  ) 
+# compare predictions from both methods
+tbl_cross(pred, row = .pred_class, col=rpart_class)
+```
+
+Not surprising, that the prediction from both methods are somewhat consistent. Given method complexity, we would expect better predictions performance from elastic net (.pred_class), but evaluation of prediction performance including hyperparameter tuning and benchmarking is pending.
+
+Finally, export table ranked by high probability
+
+```{r}
+# export table ranked by high probability
+pred %>% 
+  mutate(max_pr = pmax(`.pred_Health Insurance Plan Blue`, `.pred_Health Insurance Plan Red`)) %>% 
+  arrange(desc(max_pr)) %>% select(-max_pr) %>% 
+  write.csv(file = "pred_media_market.csv")
+```
+
+# Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
+
