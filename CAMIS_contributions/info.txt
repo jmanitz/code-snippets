@@ -1,0 +1,10 @@
+Contributions to CAMIS (Comparing Analysis Method Implementations in Software)
+
+What is CAMIS? 
+Replication of analysis methods in different software and to identify the fundamental sources of discrepant results between software.
+
+See source code:
+https://github.com/PSIAIMS/CAMIS
+
+See outputs: 
+psiaims.github.io/CAMIS/
