@@ -56,8 +56,8 @@ ggplot(data = map) + geom_sf(aes(fill = GAP_Sts), color="lightgrey") +
   theme_minimal() + theme(legend.position = "bottom")
 
 map_dt %>% group_by(GAP_Sts) %>% 
-  summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
-  arrange(desc(pct)) %>% gt() %>% fmt_number("pct")
+  summarize(pct = sum(GIS_Acres) %>% calc_prop()) 
+#%>% arrange(desc(pct)) %>% gt() %>% fmt_number("pct")
 ```
 
 ### Owners Type
@@ -70,7 +70,7 @@ ggplot(data = map) + geom_sf(aes(fill = d_Own_Type), color="lightgrey") +
 
 map_dt %>% group_by(d_Own_Type) %>% 
   summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
-  arrange(desc(pct)) %>% gt() %>% fmt_number("pct")
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
 ```
 
 ### Management Type
@@ -83,7 +83,7 @@ ggplot(data = map) + geom_sf(aes(fill = d_Mang_Typ), color="lightgrey") +
 
 map_dt %>% group_by(d_Mang_Typ) %>% 
   summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
-  arrange(desc(pct)) %>% gt() %>% fmt_number("pct")
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
 ```
 
 <!-- 
@@ -103,7 +103,7 @@ map_dt %>% group_by(d_Des_Tp) %>%
 
 ### Public access
 
-```{r, results="asis"}
+```{r}
 #d_Pub_Acce # Public access
 ggplot(data = map) + geom_sf(aes(fill = d_Pub_Acce), color="lightgrey") + 
   scale_fill_viridis(discrete = TRUE) +
@@ -111,7 +111,7 @@ ggplot(data = map) + geom_sf(aes(fill = d_Pub_Acce), color="lightgrey") +
 
 map_dt %>% group_by(d_Pub_Acce) %>% 
   summarize(pct = sum(GIS_Acres) %>% calc_prop()) %>%
-  arrange(desc(pct)) %>% gt() %>% fmt_number("pct")
+  arrange(desc(pct)) #%>% gt() %>% fmt_number("pct")
 ```
 
 ## Proportion of Protected Land in Massachuetts
