@@ -207,7 +207,9 @@ m2 <- tx_data %>%
          c14_pct_privateschool) %>% 
   lm(I(pct.insurance*100) ~ ., data = .) 
 
-tbl_regression(m2)
+#tbl_regression(m2)
+summary(m2)
+
 par(mfrow=c(2,2)); plot(m2) # model checks look alright 
 ```
 
@@ -233,7 +235,9 @@ m3 <- dt_train %>%
          length_of_residence, number_of_children, level_of_education, ethnicity,  
          starts_with(c("gender_", "maritalstatus","religion"))) %>% 
   glm(I(health_insurance != "Uninsured") ~ ., data= ., family = "binomial")
-tbl_regression(m3, exp=TRUE)
+
+#tbl_regression(m3, exp=TRUE)
+summary(m3)
 ```
 
 **Conclusions**
@@ -251,7 +255,7 @@ There are two deliverables for this work. First, prepare release notes for inter
 
 ```{r}
 dt_train %>% 
-  tbl_summary(by = health_insurance, percent = "row") %>%  add_overall()
+  tbl_summary(by = health_insurance, percent = "row") %>% add_overall()
 ```
 
 ## Recursive Partitioning 
@@ -305,8 +309,8 @@ enet_fit <- model_spec %>%
 
 # Model coefficients 
 tidy(enet_fit) %>% select(-penalty) %>% 
-  filter(estimate != 0 & term != "(Intercept)") %>% 
-  gt() %>% fmt_number(decimals=3)
+  filter(estimate != 0 & term != "(Intercept)") 
+#%>% gt() %>% fmt_number(decimals=3)
 ```
 
 **Conclusions**: 
