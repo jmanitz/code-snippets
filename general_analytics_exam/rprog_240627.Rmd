@@ -117,7 +117,7 @@ Get some initial insights into the data using different summaries and visualizat
 
 <!-- # install.packages("skimr") <TODO> -->
 
-```{r}
+```{r, eval=FALSE}
 skimr::skim(tx_data)
 ```
 
@@ -253,7 +253,7 @@ There are two deliverables for this work. First, prepare release notes for inter
 
 ## Data Summary
 
-```{r}
+```{r, eval=FALSE}
 dt_train %>% 
   tbl_summary(by = health_insurance, percent = "row") %>% add_overall()
 ```
