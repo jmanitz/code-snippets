@@ -1,5 +1,6 @@
 ---
 title: "Association Analysis for Count Data Using R"
+output: github_document
 ---
 
 ```{r}
