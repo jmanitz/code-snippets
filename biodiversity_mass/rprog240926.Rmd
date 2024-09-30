@@ -103,7 +103,7 @@ map_dt %>% group_by(d_Des_Tp) %>%
 
 ### Public access
 
-```{r}
+```{r, results="asis"}
 #d_Pub_Acce # Public access
 ggplot(data = map) + geom_sf(aes(fill = d_Pub_Acce), color="lightgrey") + 
   scale_fill_viridis(discrete = TRUE) +
