@@ -1,0 +1,107 @@
+---
+title: "Temperature Shift in Boston"
+author: "Juliane Manitz"
+date: "`r format(Sys.time(),  '%d %B, %Y')`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(readxl)
+library(tidyr)
+require(purrr)
+require(magrittr)
+
+require(gridExtra)
+library(ggplot2)
+library(viridis)
+```
+
+
+## Load Data
+
+NOWData - NOAA Online Weather Data. Monthly summarized data calculates averages, totals, daily extremes or frequencies for the selected variable for each month of the year for the selected range of years. Note: trace precipition/snowfall/snow depth amounts are treated as zero in sums, mean, and number of days counts. Annual average temperatures are the average of the twelve monthly values. Temperatures are reported in degrees F; precipitation, snowfall and snow depth are reported in inches. Source: https://www.weather.gov/wrh/Climate?wfo=box
+
+```{r}
+# To load all sheets in a workbook, use lapply()
+path <- "Temp_Boston.xlsx"
+dt_list <- map(excel_sheets(path), read_excel, path = path, skip=2)
+names(dt_list) <- excel_sheets(path)
+#dt_list <- lapply(excel_sheets(path), read_excel, path = path, skip=2)
+
+# Data preprocessing
+dt_list2 <- lapply(names(dt_list), function(x)
+  dt_list[[x]] %>%  
+    mutate_if(is.character, list(~na_if(., "M") %>% na_if(., "T") %>% as.numeric)) %>%
+    pivot_longer(-Year, names_to = "Month", values_to = x) #  assign(x, df_list[[x]], envir = .GlobalEnv)
+)
+
+# Combine list into one dataset
+dt <- Reduce(left_join, dt_list2)
+
+# Separate Annual averages from monthly values
+dtY <- dt %>% filter(Month == "Annual")
+dtM <- dt %>% filter(Month != "Annual") %>% 
+  mutate(date = paste0("01-",tolower(Month),"-",Year) %>% as.Date(format = "%d-%b-%Y"))
+```
+
+## Time Series 
+
+```{r}
+dtY %>% filter(Year<1950) %>% summarize(mean(meanTemp))
+ggplot(dtY, aes(x=Year, y=meanTemp)) +
+  geom_line() + stat_smooth(method = "loess", se=FALSE, formula = y ~ x, size = 1) +
+  geom_hline(yintercept = dtY %>% filter(Year<1950) %>% summarize(mean(meanTemp)) %>% pull(), 
+             linetype = 2, color = "darkred", linewidth = 1) + 
+  scale_x_continuous(breaks=seq(1850, 2020, 10)) + 
+  labs(x="year", y="Annual Temperature (in F)", title="Annual Average Temperature in Boston, MA") +
+  theme_minimal()
+```
+
+## Summer Temperature Shift 
+
+```{r}
+# Define bins for coloring based on early data < 1950
+cols <-c("cornflowerblue","cornsilk","brown1","darkred") 
+cc <- dtM %>% filter(Month %in% c("Jun","Jul","Aug","Sep") & Year < 1950) %>% 
+  pull(meanTemp) %>% quantile(probs =c(.325,.5,.95))
+dtM %<>% mutate(meanTempC = factor(cut(meanTemp, breaks = c(0,cc,120)), 
+                labels=c("Cooler than average", "Average", "Warmer than average", "Extremely hot")))
+```
+
+```{r, fig.height=10, fig.width=6, warning=FALSE}
+p1 <- dtM %>% 
+  filter(Month %in% c("Jun","Jul","Aug", "Sep") & Year < 1950) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = TRUE) +
+  labs(y="Frequency", x="Temperature (in F)", 
+       title="Summer Temperatures in Boston, MA", subtitle = "1872-1950", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() + theme(legend.position = c(0.85,0.75))
+
+p2 <- dtM %>% 
+  filter(Month %in% c("Jun","Jul","Aug", "Sep") & Year < 1990 & Year > 1950) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = FALSE) +
+  labs(y="Frequency", x="Temperature (in F)", subtitle = "1950-1990", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() 
+
+p3 <- dtM %>% 
+  filter(Month %in% c("May","Jun","Jul","Aug", "Sep") & Year > 1990) %>% 
+  ggplot(aes(meanTemp, fill = meanTempC)) + scale_fill_manual(values = cols) + 
+  geom_histogram(bins = 27, show.legend = FALSE) +
+  labs(y="Frequency", x="Temperature (in F)", subtitle="1990-2024", fill="") +
+  scale_x_continuous(limits = c(57,82), breaks=seq(50,120, 5)) + 
+  theme_minimal() 
+
+grid.arrange(p1,p2,p3,ncol=1)
+```
+
+## Session Information (for Reproducibility)
+
+```{r}
+print(sessionInfo(), locale = FALSE)
+```
