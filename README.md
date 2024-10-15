@@ -5,7 +5,11 @@
 * CAMIS = Comparing Analysis Method Implementations in Software
 * Replication of analysis methods in different software and to identify the fundamental sources of discrepant results between software.
 * See outputs: psiaims.github.io/CAMIS/
-  
+
+## Soil Testing Capstone
+
+* Build a dashboard for soil tests outputs 
+
 ## Ocean Capstone
 
 * Analysis ocean acoustics data from Peru
