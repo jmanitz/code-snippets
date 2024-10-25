@@ -15,7 +15,47 @@ library(tidyr)
 library(ggplot2)
 library(paletteer)
 library(viridis)
-require(plotly)
+require(plotly) 
+require(gt)
+
+
+# define color scheme 
+# https://www.figma.com/design/TIFEm2kx0n8nA7IZI0viUG/Salt%3A-Color-Library-(Community)?node-id=3907-1614&node-type=canvas
+
+
+green400 <- "#309C5A"
+green10 <- "#D1F4C9"
+green700 <- "#0C5D2E"
+
+citrine400 <- "#B29C42"
+cobalt100 <- "#EDF4FF"
+cobalt400 <- "#7694CF"
+fur400 <- "#C2906B"
+lavender <- "#BA85BA"
+ocean400 <- "#50A7BA"
+slate100 <- "#E1E8F7"
+slate400 <- "#8691AC"
+slate700 <- "#404961"
+
+salmon400 <- "#DE7878"
+teal400 <- "#3095A6"
+purple400 <- "#C074CB" #"#A961B5"
+cider400 <- "#DB8A48"
+```
+
+
+## Overall Soil Health
+
+```{r}
+hval<- 68 # overall soil health value
+
+df <- data.frame(hsize=4, ymin = c(0,hval), ymax = c(hval, 100), group=c("health", "other"))
+
+df %>% ggplot(aes(xmax = 4, xmin=2.2, ymin=ymin, ymax=ymax, fill=group)) +
+  geom_rect() + coord_polar(theta="y") + xlim(c(-1, 4)) +
+  geom_text(x=-1, y=0, label=hval, size=20, col=slate700) +
+  scale_fill_manual(values=c(green400,green10)) +
+  theme_void() + theme(legend.position = "none")
 ```
 
 ## NPK Plot
@@ -27,53 +67,52 @@ require(plotly)
 ### Mock Data 
 
 ```{r}
-elmts <- c("Nitrogen (N)","Phosphorus (P)","Potassium (K)")
-dt <- data.frame(
-  id = rep(paste0("sample",1:3), times=3), 
-  element = rep(elmts, each=3), 
-  value = c(85, 140, 125,          # N ref 100-130
-            75.89, 52.47, 35.26,   # P ref 4-14
-            307.91, 135.09, 164.1), # K ref 100-160
+elmts <- c("Nitrate-Nitrogen\n(N, mg/kg)","Phosphorus\n(P, ppm)","Potassium\n(K, 10ppm)")
+NPKdt <- data.frame(
+  id = rep(paste0("sample",1:4), times=3), 
+  element = rep(elmts, each=4), 
+  value = c(8.5, 14, 12, 34,          # N ref 10-50 mg/kg
+            7.5, 5.2, 3.5, 12.7,   # P ref 4-14 ppm
+            23, 13, 16, 9.5), # K ref 10-16 10ppm
   low=NA, high=NA
 )
 
 # Define Optimum values for reference 
-ref <- data.frame(
-  id = "optimum", element = elmts, 
-  value=c(120, 8, 130), low=c(110, 4, 100), high=c(130,14,160)
+NPKref <- data.frame(
+  id = "optimal\nrange", element = elmts, 
+  value=c(20, 8, 13), low=c(10, 4, 10), high=c(50,14,16)
 )
 ```
 
 ```{r}
-p <- rbind(dt, ref) %>% 
+rbind(NPKdt, NPKref) %>% 
   ggplot(aes(x=element, y=value, fill=id, label=value)) +  
-  geom_bar(stat="identity", position=position_dodge()) +
+  geom_bar(stat="identity", position=position_dodge(), color="lightgray") +
   #geom_text(position=position_dodge()) + # add numbers to top of the bar
-  geom_errorbar(aes(ymin=low, ymax=high), width=.2, position=position_dodge(.9)) + 
-  scale_fill_paletteer_d("ggthemes::excel_Crop") + 
+  geom_errorbar(aes(ymin=low, ymax=high), width=.2, position=position_dodge(.9), color=slate700) + 
+  scale_fill_manual(values=c(slate400, green400, citrine400, fur400, ocean400))+ # scale_fill_paletteer_d("ggthemes::excel_Crop") + 
   labs(title="NPK Macronutrients", x="Macronutirent", y="Test Value", fill="" ) + 
-  theme_minimal() #+ coord_flip()
+  theme_minimal()
 
 # Make graphics interactive 
-ggplotly(p)
+#ggplotly(p)
 ```
 
 ## pH Plot
 
 ```{r}
-# Acidic <3.5 - 6.5
-# Optimal 5.5-7.0
-# Alkaline 7.4->9.0
+ph_val <- 6.4
+ph_ref <- c(5.5, 7.0)
 
 plot_ly(
   type = "indicator", mode = "gauge+number+delta", #
   #title = list(text = "Soil pH", font = list(size = 24)),
-  value = 6.4,
-  delta = list(reference = 7, increasing = list(color = "deeppink"), decreasing = list(color = "deeppink")),
+  value = ph_val,
+  delta = list(reference = 7, increasing = list(color = cobalt400), decreasing = list(color = salmon400)),
   gauge = list(
-    axis = list(range = list(NULL, 14), tickwidth = 0.2, tickcolor = "darkgray"),
-    bar = list(color = "darkgray", thickness = 0.2),bgcolor = "white", borderwidth = 2, bordercolor = "gray",
-    threshold = list(line = list(color = "deeppink", width = 7), thickness = 1, value = 7),
+    axis = list(range = list(0, 14), tickwidth = 0.2, tickcolor = "lightgray"),
+    bar = list(color = "lightgray", thickness = 0),bgcolor = "white", borderwidth = 1.2, bordercolor = "lightgray",
+    threshold = list(line = list(color = slate700, width = 7), thickness = 1, value = ph_val),
     steps = list(
       list(range = c(0,1), color="tomato"),
       list(range = c(1,2), color="coral"),
@@ -82,68 +121,109 @@ plot_ly(
       list(range = c(4,5), color="yellow"),
       list(range = c(5,6), color="greenyellow"),
       list(range = c(6,7), color="limegreen"),
-      list(range = c(7,8), color="forestgreen"), #"seagreen3"),
+      list(range = c(7,8), color=green400), #"forestgreen", "seagreen3"),
       list(range = c(8,9), color="darkcyan"), 
-      list(range = c(9,10),color="steelblue"),       
+      list(range = c(9,10),color="steelblue"), #       
       list(range = c(10,11),color="royalblue"),
       list(range = c(11,12),color="slateblue"),
       list(range = c(12,13),color="RebeccaPurple"),
       list(range = c(13,14),color="indigo")))) %>%
-  layout(margin = list(l=20,r=30), font = list(color = "darkblue", family = "Arial"))
+  layout(margin = list(l=20,r=30), font = list(color = slate700, family = "Arial"))
 
 
 ```
 
 <!-- https://stackoverflow.com/questions/24900903/how-to-draw-gauge-chart-in-r
-```{r, eval = false}
-gg.gauge <- function(pos,breaks=c(0,30,70,100)) {
-  require(ggplot2)
+
+```{r, eval = FALSE}
+gg.gauge <- function(pos,breaks=c(0,5.5,8,14)) {
+  
   get.poly <- function(a,b,r1=0.5,r2=1.0) {
     th.start <- pi*(1-a/100)
     th.end   <- pi*(1-b/100)
-    th       <- seq(th.start,th.end,length=100)
+    th       <- seq(th.start,th.end,length=14)
     x        <- c(r1*cos(th),rev(r2*cos(th)))
     y        <- c(r1*sin(th),rev(r2*sin(th)))
     return(data.frame(x,y))
   }
-  ggplot()+ 
-    geom_polygon(data=get.poly(breaks[1],breaks[2]),aes(x,y),fill="red")+
-    geom_polygon(data=get.poly(breaks[2],breaks[3]),aes(x,y),fill="gold")+
-    geom_polygon(data=get.poly(breaks[3],breaks[4]),aes(x,y),fill="forestgreen")+
+  
+ggplot()+ 
+    geom_polygon(data=get.poly(breaks[1],breaks[2]),aes(x,y),fill=cider400)+
+    geom_polygon(data=get.poly(breaks[2],breaks[3]),aes(x,y),fill=green400)+
+    geom_polygon(data=get.poly(breaks[3],breaks[4]),aes(x,y),fill=cobalt400)+
     geom_polygon(data=get.poly(pos-1,pos+1,0.2),aes(x,y))+
     geom_text(data=as.data.frame(breaks), size=5, fontface="bold", vjust=0,
-              aes(x=1.1*cos(pi*(1-breaks/100)),y=1.1*sin(pi*(1-breaks/100)),label=paste0(breaks,"%")))+
+              aes(x=1.1*cos(pi*(1-breaks/100)),y=1.1*sin(pi*(1-breaks/100)),label=breaks))+
     annotate("text",x=0,y=0,label=pos,vjust=0,size=8,fontface="bold")+
-    coord_fixed()+
-    theme_bw()+
-    theme(axis.text=element_blank(),
-          axis.title=element_blank(),
-          axis.ticks=element_blank(),
-          panel.grid=element_blank(),
-          panel.border=element_blank()) 
+    coord_fixed() + theme_minimal()+
+    theme(axis.text=element_blank(), axis.title=element_blank(), axis.ticks=element_blank(), 
+          panel.grid=element_blank(), panel.border=element_blank()) 
 }
-gg.gauge(52,breaks=c(0,35,70,100))
+gg.gauge(52,breaks=c(0,5.5,8,14))
 ```
 -->
 
-## Load Example Test Result
+## Soil composition
 
 ```{r}
-dt <- read.csv("data_example.csv", skip=6, stringsAsFactors = FALSE)[c(1:7),c(3,4,6,8,10)] 
-colnames(dt) <- c("type","element", paste0("sample",1:3))
-dt2 <- dt %>% pivot_longer(cols = starts_with("sample")) %>% transform(value = as.numeric(value))
-```
+org_m <- 5
+org_ref <- c(3,6)
 
-### Plot data
+#create data frame
+dt <- data.frame("category" = c('minerals', 'water', 'air', 'organic matter'),
+                   "amount" = c(50-org_m, 25, 25, org_m), 
+                   "color"=c(fur400, cobalt400, slate400, green400))
+
+ggplot(dt, aes(x="", y=amount, fill=category)) +
+  geom_bar(stat="identity", width=1, color="lightgray", size=1) +
+  coord_polar("y", start=90) +
+  scale_fill_manual(values=c(slate100, fur400, green400, cobalt400)) + 
+  geom_text(aes(label = paste0(amount, "%")), position = position_stack(vjust=0.5), color=slate700, size=5) +
+  theme_void()
+```
+## Micronutrients
+
 
 ```{r}
-dt2 %>% filter(type == "nutrient") %>% 
-  ggplot(aes(x=element, y=value, fill=name)) +  
-  geom_bar(stat="identity", position=position_dodge()) +
-  scale_fill_viridis(discrete = TRUE) +
-  theme_minimal()  + coord_flip()
+# "sulfur (S)", "calcium (Ca)", "magnesium (Mg)", "iron (Fe)", "boron (B)", "manganese (Mn)", "copper (Cu)", "zinc (Zn)", "molybdenum (Mo)", "nickel (Ni)", "chlorine (Cl)"
+
+# Source code from https://github.com/ricardo-bion/ggradar
+library(ggradar)
+library(scales)
+
+# Example data 
+dt <- read.csv("data_example.csv", skip=6, stringsAsFactors = FALSE)[c(4:14),c(4,6,8,10)] 
+colnames(dt) <- c("element", paste0("sample",1:3))
+dt2 <- dt %>% 
+  pivot_longer(cols = starts_with("sample")) %>% transform(value = as.numeric(value))  %>% pivot_wider(names_from = element)
+
+# Plot radar
+ggradar(dt2, values.radar="", axis.label.size = 4, plot.title = "Soil Micronutrients",
+        group.point.size = 0, group.line.width = 0.7, 
+        fill=TRUE, fill.alpha = 0.25, group.colours = c(green400,citrine400,fur400), 
+        background.circle.colour = slate100, background.circle.transparency = 0.2) + 
+  theme_void()
+
 ```
 
+## Table View
+
+```{r}
+npk_dt <- NPKdt %>% pivot_wider(names_from = id) %>% select(-c(low,high)) %>% 
+  left_join(NPKref %>% select(-c(id,value)),by="element")
+npk_dt$group <- "Macronutrients"
+ph_dt <- data.frame(element = "pH value", t(runif(5.5,7, n=4)), t(ph_ref), "Acidity")
+org_dt <- data.frame(element = "Organic matter (%)", t(runif(2,7, n=4)), t(org_ref), "Soil composition")
+colnames(ph_dt)[-1] <- colnames(org_dt)[-1] <- c(paste0("sample",1:4), "low", "high", "group")
+
+rbind(npk_dt, org_dt, ph_dt) %>% 
+  gt(groupname_col = "group") %>% fmt_number(decimals = 2, drop_trailing_zeros=TRUE) %>% 
+  tab_spanner(label = "Optimal range", columns = c(low, high)) %>% 
+  tab_style(style=cell_borders(sides="left"), locations = cells_body(columns=c(sample1, low)))
+
+```
+
+<!--TODO: Soil Respiration - CO2-C in ppm	100	>200-->
 ## Session Information (for Reproducibility)
 
 ```{r}
