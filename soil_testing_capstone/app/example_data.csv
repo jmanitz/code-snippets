@@ -1,10 +1,25 @@
-﻿id,element,value,low,high,
-1,sample1,Nitrogen (N),85,NA,NA
-2,sample2,Nitrogen (N),140,NA,NA
-3,sample3,Nitrogen (N),125,NA,NA
-4,sample1,Phosphorus (P),75.89,NA,NA
-5,sample2,Phosphorus (P),52.47,NA,NA
-6,sample3,Phosphorus (P),35.26,NA,NA
-7,sample1,Potassium (K),307.91,NA,NA
-8,sample2,Potassium (K),135.09,NA,NA
-9,sample3,Potassium (K),164.1,NA,NA
+﻿id,element,value
+sample1,Nitrogen (N),8.5
+sample2,Nitrogen (N),14
+sample3,Nitrogen (N),12.5
+sample4,Nitrogen (N),34
+sample1,Phosphorus (P),7.5
+sample2,Phosphorus (P),5.24
+sample3,Phosphorus (P),3.5
+sample4,Phosphorus (P),12.7
+sample1,Potassium (K),23
+sample2,Potassium (K),13
+sample3,Potassium (K),16
+sample4,Potassium (K),9.5
+sample1,ph value,6.03
+sample2,ph value,6.94
+sample3,ph value,6.45
+sample4,ph value,5.93
+sample1,organic matter,6.32
+sample2,organic matter,6.98
+sample3,organic matter,3.22
+sample4,organic matter,4.26
+sample1,respiration,123
+sample2,respiration,95
+sample3,respiration,143
+sample4,respiration,230
