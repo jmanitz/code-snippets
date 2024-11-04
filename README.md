@@ -8,7 +8,7 @@
 
 ## Soil Testing Capstone
 
-* Build a dashboard for soil tests outputs 
+* Build a dashboard for soil tests outputs hosted here: https://jmanitz.shinyapps.io/soilapp/
 
 ## Ocean Capstone
 
