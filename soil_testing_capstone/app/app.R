@@ -2,6 +2,7 @@ library(plotly)
 library(tidyverse)
 library(shiny)
 library(shinythemes)
+library(shinyBS)
 library(bslib)
 library(fresh)
 require(gt)
@@ -37,16 +38,17 @@ dt_ref <- data.frame(id = "optimal", group = grp, element = elmts, elmts_nm = pa
 
 # Define UI ----
 ui <- navbarPage(
-  title = div(img(src = "www/Icon.png", height = "57.5px", width = "auto"), 'Soil Regeneration Hub'),
+  title = div(img(src = "Icon.png", height = "57.5px", width = "auto"), 'Soil Regeneration Hub'),
     theme = bs_theme(
       bootswatch = "sandstone", 
       bg = "#F2F5FA", #"#E1E8F7",
       fg = green700, ##D1F4C9",
       primary = slate700, 
       secondary = green400,#"#309C5A", 
+      info = green400,
       base_font = font_google("Karla", local = TRUE)
     ), 
-  windowTitle = h1('Soil Regeneration Hub'),
+  windowTitle = 'Soil Regeneration Hub',
   # icon = "Icon.png",
   # icon = shiny::icon("Icon"),
 
@@ -55,12 +57,13 @@ ui <- navbarPage(
       
     sidebarPanel(
       
-      selectInput("sel", "Select Data input", choices = c("manual", "csv file")),
+      selectInput("sel", "Select Data input", choices = c("manual", "csv file", "example data")),
       
       conditionalPanel("input.sel == 'csv file'",
-        fileInput('data', 'Choose csv file:', accept='.csv')
+        fileInput('data', 'Choose csv file:', accept='.csv'), 
+        "Data must be provided as a comma-separated csv file.",
+        tags$a(href="https://github.com/jmanitz/code-snippets/blob/main/soil_testing_capstone/app/example_data.csv", "See example data.")
       ), 
-      
       conditionalPanel("input.sel == 'manual'",
         sliderInput("hval", "Overall Soil Value", 0, 100, 72),
         sliderInput("ph", "pH value", 1, 14, 6.7, step=0.1),
@@ -77,18 +80,38 @@ ui <- navbarPage(
     mainPanel(
       h3("Soil Test Results"),
       layout_column_wrap(width = 1/2, height = 270,
-        card(full_screen = TRUE, card_header("Overall Soil Health"), plotOutput('HealthPlot')),
-        card(full_screen = TRUE, card_header("pH Value"), plotlyOutput('pHplot'))
+        card(full_screen = TRUE, 
+             card_header(class = "d-flex justify-content-between", "Overall Soil Health", icon("circle-info") |>
+                         popover("Overall soil health is a composite measure of ... . Details to it calculation can be found <here>")), 
+             plotOutput('HealthPlot')),
+        card(full_screen = TRUE, 
+             card_header(class = "d-flex justify-content-between", "pH Value", icon("circle-info") |>
+                           popover("The acidity or alkalinity of soil is indicated by its pH measurement. The pH range is 0 (extremely acid) to 14 (extremely alkaline). Most plants doing well when the soil pH is between 6.2 and 6.8.")), 
+             plotlyOutput('pHplot'))
       ), 
       
-      card(full_screen = TRUE, height = 300, card_header("Macronutrients"), plotlyOutput('NPKplot')), 
+      
+      card(full_screen = TRUE, height = 300, 
+           card_header(class = "d-flex justify-content-between", "Macronutrients", icon("circle-info") |>
+                         popover("The three primary macronutrients are nitrogen (N), phosphorus (P), and potassium (K), each playing a critical role: nitrogen supports leafy growth, phosphorus aids root development and energy transfer, and potassium enhances overall plant health and resilience.")), 
+           
+           plotlyOutput('NPKplot')), 
       
       layout_column_wrap(width = 1/2, height = 270,
-        card(full_screen = TRUE, card_header("Soil Composition"), plotOutput('OrgMplot')),
-        card(full_screen = TRUE, card_header("Soil Respiration"), plotlyOutput('RespPlot'))
+                         
+        card(full_screen = TRUE, 
+             card_header(class = "d-flex justify-content-between", "Soil Composition", icon("circle-info") |>
+                           popover("Soil organic matter is made up of decomposing plant and animal material, microbial cells, and compounds synthesized by microbes; higher levels are strongly linked to improved soil fertility.")), 
+             plotOutput('OrgMplot')),
+        
+        card(full_screen = TRUE, 
+             card_header(class = "d-flex justify-content-between", "Soil Respiration", 
+                         popover(icon("circle-info"), "Soil respiration describes the process in which plant roots and microbes release carbon dioxide (CO2) into the atmosphere when soil organisms respire.")), 
+             plotlyOutput('RespPlot'))
       ),
       
-      card(full_screen = TRUE, height = 300, card_header("Table View"), tableOutput('tab')), 
+      card(full_screen = TRUE, height = 300, 
+           card_header("Table View"), tableOutput('tab')), 
       
     )  
   )),
@@ -97,7 +120,15 @@ ui <- navbarPage(
     mainPanel(
       card(full_screen = TRUE, height = 600, #card_header("Information About Your Location"),
            imageOutput('locData'))
+  )),
+  
+  tabPanel("Recommendations", 
+           mainPanel(
+             
+      card(full_screen = TRUE, height = 600, width=600, card_header("Recommendations to Improve Your Soil Health"),
+           tableOutput('recommendations'))           
   ))
+  
 ) 
 
 # Define server logic ----
@@ -119,11 +150,15 @@ server <- function(input, output) { #  function(input, output, session) {
         value = c(input$hval, input$nitr, input$phos, input$pota, input$ph, input$orgm, input$resp)
       )
     }else{
+      if(input$sel == "example data"){
+        dt <- read.csv("example_data.csv", header=TRUE)
+      }else{
       validate(
+        # need(ext == "csv", "Please upload a csv file"))
         need(input$data != "", "Please select a data set")
       )
       dt <- read.csv(input$data$name, header = TRUE)
-      # dt <- read.csv("example_data.csv", header=TRUE)
+      }
       dt[,c("group","elmts_nm")] <- dt_ref[match(dt$element, dt_ref$element), c("group","elmts_nm")]
     }
     return(dt)
@@ -156,21 +191,16 @@ server <- function(input, output) { #  function(input, output, session) {
   # Macronutrients
   output$NPKplot <- renderPlotly({
     
-#    dt <- read.csv("example_data.csv", header=TRUE)
-#    dt[,c("group","elmts_nm")] <- dt_ref[match(dt$element, dt_ref$element), c("group","elmts_nm")]
-#     print(bind_rows(dt, dt_ref) %>% filter(group == "Macronutrients"))
-
     pp <- bind_rows(dt(), dt_ref) %>% filter(group == "Macronutrients") %>% 
-      # bind_rows(data.frame(dt, group= "Macronutrients"), dt_ref %>% filter(group == "Macronutrients")) %>% 
-      ggplot(aes(x=elmts_nm, y=value, fill=id, label=value)) +  
+      ggplot(aes(x=elmts_nm, y=value, fill=id, text=paste(element,"=",value))) +
       geom_bar(stat="identity", position=position_dodge(0.9), color="lightgray") +
       #geom_text(position=position_dodge()) + # add numbers to top of the bar
-      geom_errorbar(aes(ymin=low, ymax=high), position=position_dodge(.9), color=slate700) + 
-      scale_fill_manual(values=c(slate400, green400, citrine400, fur400, ocean400))+ # scale_fill_paletteer_d("ggthemes::excel_Crop") + 
+      geom_errorbar(aes(ymin=low, ymax=high), width = 0.3, position=position_dodge(.9), color=slate700) + 
+      scale_fill_manual(values=c(slate400, green400, citrine400, fur400, ocean400))+ 
       labs(x="Macronutirent", y="Test Value", fill="" ) + 
       theme_minimal() 
     
-    ggplotly(pp)
+    ggplotly(pp, tooltip = "text")
   })
   
   output$pHplot <- renderPlotly({
@@ -180,12 +210,14 @@ server <- function(input, output) { #  function(input, output, session) {
     
     if(length(ph_val)>1){
       
-      dt() %>% filter(group == "Acidity") %>% mutate(index=1:n()) %>% 
+      pp <- dt() %>% filter(group == "Acidity") %>% mutate(index=1:n()) %>% 
         ggplot(aes(x=index, y=value)) + geom_point(size = 0.5, col=green700)+
         geom_line(col=green400, linetype="dotdash", size=0.5) + 
         geom_rect(xmin = -Inf, xmax = Inf, ymin = 5.5, ymax = 7, fill = green10, alpha = 0.1) +
         labs(x = "Sample", y = "pH Value") + ylim(0,15) + theme_minimal()
       
+      ggplotly(pp)
+        
     }else{
     
     plot_ly(
@@ -221,11 +253,13 @@ server <- function(input, output) { #  function(input, output, session) {
     org_m <- dt() %>% filter(group == "Soil composition") %>% pull(value)
     
     if(length(org_m)>1){
+      
       dt() %>% filter(group == "Soil composition") %>% mutate(index=1:n()) %>% 
         ggplot(aes(x=index, y=value)) + 
         geom_line(col=green400, linetype="dotdash", size=1.1) + geom_point(col=green700)+
         geom_rect(xmin = 0, xmax = Inf, ymin = 3, ymax = 6, fill = green10, alpha = 0.1) +
         labs(x = "Sample", y = "Organic Matter (%)") + ylim(0,10) + theme_minimal()
+      
     }else{
       #create data frame
       dtm <- data.frame("category" = c('minerals', 'water', 'air', 'organic matter'),
@@ -244,17 +278,15 @@ server <- function(input, output) { #  function(input, output, session) {
   
   output$RespPlot <- renderPlotly({
     
-    #print(bind_rows(dt(), dt_ref) %>% filter(group == "Soil respiration"))
-      
     pp <- bind_rows(dt(), dt_ref) %>% filter(group == "Soil respiration") %>% 
-      ggplot(aes(x=elmts_nm, y=value, fill=id, label=value)) +  
-      geom_col(color="lightgray", position= position_dodge(0.9)) +
-      geom_errorbar(aes(ymin=low, ymax=high), width=.2, position=position_dodge(.9), color=slate700) + 
+      ggplot(aes(x=elmts_nm, y=value, fill=id, text=paste(element,"=",value))) +  
+      geom_bar(stat="identity", position=position_dodge(0.9), color="lightgray") +
+      geom_errorbar(aes(ymin=low, ymax=high), width = 0.1, position=position_dodge(.9), color=slate700) + 
       scale_fill_manual(values=c(slate400, green400, citrine400, fur400, ocean400))+ # scale_fill_paletteer_d("ggthemes::excel_Crop") + 
       labs(x="", y="Test Value", fill="" ) + 
-      theme_minimal() + theme(legend.position = "bottom")
+      theme_minimal() 
     
-    ggplotly(pp)
+    ggplotly(pp, tooltip = "text")
     
   })
   
@@ -269,7 +301,16 @@ server <- function(input, output) { #  function(input, output, session) {
       tab_spanner(label = "Optimal range", columns = c(low, high)) %>% 
       tab_style(style=cell_borders(sides="left"), locations = cells_body(columns=c(low)))
   })
+  
+  output$recommendations <- render_gt({
+    
+    rdt <- read.csv('recommendations.csv', header=TRUE)
+    rdt %>% 
+      gt(groupname_col = "Problem") 
+
+  })
 }
+
 # Run the app ----
 # shinyAppDir(".")
 shinyApp(ui = ui, server = server)
