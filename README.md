@@ -30,6 +30,11 @@
 
 * Time series analysis of Temperature shift in Boston
 
+## Python Coding Problems
+
+* Solving little coding problems in python from different sources
+* Example: sort picture by location, time and name
+
 ## General Analytics Exam
 
 * Health insurance in Texas by ethnicity and education
