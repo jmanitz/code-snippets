@@ -34,7 +34,7 @@
 * Build a dashboard for soil tests outputs hosted here: https://jmanitz.shinyapps.io/soilapp/
 * Moved to https://github.com/jmanitz/soil_testing_app
 
-* ## Biodiversity Massachuetts
+## Biodiversity Massachuetts
 
 * Land Protection Status in Massachuetts for 30x30 goal
 * Geospatial visualizations and basic calculations for proportion of protected land
