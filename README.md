@@ -13,7 +13,7 @@
 ## Python Coding Problems
 
 * Solving little coding problems in python from different sources
-* Example: sort picture by location, time and name
+* Example: sort picture by location, time and name, extract hashtags
 
 ## General Analytics Exam
 
