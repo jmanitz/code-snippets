@@ -3,9 +3,8 @@ title: "Working with US Census Data"
 author: "Juliane Manitz"
 date: "`r Sys.Date()`"
 format: 
-  html:
-    code-fold: false
-    self-contained: true
+  gfm:
+    prefer-html: true
 editor: visual
 toc: true
 execute:
@@ -16,7 +15,6 @@ execute:
 ---
 
 ```{r}
-
 require(tidyverse)
 require(stringr)
 require(sf)
@@ -28,7 +26,7 @@ require(censusapi)  # US Economic Census Data
 require(tidyUSDA)   # USDA Census 
 
 options(tigris_use_cache =TRUE)
-source("read_keys.R") # API keys
+source("../read_keys.R") # API keys
 ```
 
 ## United States Map Shapefiles
