@@ -1,0 +1,505 @@
+---
+title: "Retrieve Census Data"
+author: "Juliane Manitz"
+date: "`r Sys.Date()`"
+output: 
+  html_document: 
+    code_folding: show
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+path <- "C:/Users/JulianeManitz/OneDrive - Divert Inc/Market Intel/1_Raw Data/"
+
+## Load libraries 
+library(tidyverse)
+require(stringr)
+library(sf)
+
+# Census handling 
+library(tidycensus)
+library(censusapi)
+require(tidyUSDA)
+library(usdata) # census data
+library(zipcodeR) # search ZIP codes based on city,county,state
+
+# census_api_key("c4c17afcd36ab763c31a1761be60ca0c1e5ef83d", install = "TRUE")
+census_key <- "c4c17afcd36ab763c31a1761be60ca0c1e5ef83d"
+usda_key <- "918AE0D9-34D4-3572-A7B4-E2822C8CC3A4"
+```
+
+## Read Map Shapefiles
+
+**States boundaries:**
+
+Source: Census TIGER/Line Shapefiles
+https://www.census.gov/cgi-bin/geo/shapefiles/index.php
+
+**County boundaries:**
+
+We use geometry map provided through `tidycensus` api call, because TIGER/Line Shapefiles from census website (`3_Census/tl_2024_us_county`) do not have required details, e.g Great lakes. 
+
+```{r}
+# Load map data for state boundaries 
+map <- read_sf(paste0(path,'3_Census/tl_2024_us_state/tl_2024_us_state.shp')) %>% 
+  filter(!STATEFP %in% c("02","15","72","60","81","07","64","14","66","69","78")) 
+# %>%   st_transform('EPSG:3082')
+```
+
+## Get Data from American Community Survey (ACS)
+
+Source: https://api.census.gov/data/2023/acs/acs5/variables.html
+
+### Select Variables of Interest 
+
+**Demographics**
+
+*	B01001_001 = Total Population
+*	B09001_001 = Population Under 18 Years by Age
+*	B01002_001 = Median Age
+*	B02001_002 = Race, Estimate!!Total:!!Whit alone 
+*	B05001_002 = Nativity and Citizenship Status, born in the United States
+*	B27001_001 = Health insurance Coverage Status 
+*	B28001_002 = Has one or more types of computing devices
+
+**Housing/Geographical Mobility**
+
+*	B25001_001 = Housing Units
+*	B11016_010 = Single person Household (Household size)
+*	B07001_017 = Geographical Mobility; Same house 1 year ago (NA)
+*	B07001_049 = Geographical Mobility; Moved from different county within same state
+*	B07001_065 = Geographical Mobility; Moved from different state
+*	B07101_001 = Movers Between Regions in the United States (NA)
+
+**Income**
+
+*	B19013_001 = Median household income in the past 12 months (in 2023 inflation-adjusted dollars)
+*	B10059_002 = Income in the past 12 months below poverty level
+*	B19083_001 = Gini Index of Income Inequality
+* B99221_002 = Allocation of Food Stamps/SNAP Receipt
+*	B09010_002 = Household received Supplemental Security Income (SSI), cash public assistance, or Food Stamps/SNAP in the past 12m
+*	B22001_002 = Household received Food Stamps/SNAP in the past 12 months Presence of People > 60 Years 
+* B22002_001 = Household received Food Stamps/SNAP in the past 12 months Presence of Children < 18 years
+
+**Education**
+
+*	B14001_002 = Total enrolled in school
+*	B15003_018 = GED or alternative credential for Population > 25 Years
+*	B15003_022 = Bachelor's degree for Population > 25 Years
+*	B15003_023 = Master's degree for Population > 25 Years
+*	B15003_024 = Professional school degree for Population > 25 Years
+*	B15003_025 = Doctorate degree for Population > 25 Years
+
+**Occupation**
+(in the Past 12 Months for the Civilian Employed Population 16 Years and Over)
+
+*	B24011_023 = Occupation in Food preparation and serving related occupations 
+*	B24011_033 = Occupation in Production, transportation, and material moving occupations
+*	B24011_030 = Occupation in Farming, fishing, and forestry occupations
+*	Detailed occupation/industry available, e.g animal food but all NA: B24114_019 = Farmers, ranchers, and other agricultural managers, B24114_018 = Transportation, storage, and distribution managers, B24114_023 = Food service managers,  B24114_036 = Buyers and purchasing agents, farm products; B24114_038 = Purchasing agents, except wholesale, retail, and farm products; B24114_106 = Agricultural and food scientists; B24114_125 = Agricultural and food science technicians; B24114_278 = Chefs and head cooks; B24114_279 = First-line supervisors of food preparation and serving workers; B24114_280 = Cooks; B24114_281 = Food preparation workers; B24114_283 = Fast food and counter workers; B24114_284 = Waiters and waitresses; B24114_285 = Food servers, nonrestaurant; B24114_288 = Hosts and hostesses, restaurant, lounge, and coffee shop; B24114_289 = Food preparation and serving related workers, all other; B24114_393 = Graders and sorters, agricultural products; B24114_480 = Food batchmakers; B24114_481 = Food cooking machine operators and tenders; B24114_482 = Food processing workers, all other
+
+**Commuting**
+
+*	B08006_008 = Means of Transportation to Work: Public Transportation
+*	B08006_014 = Means of Transportation to Work: Bicycle
+*	B08006_015 = Means of Transportation to Work: Walked
+*	B08013_001 = Aggregate Travel Time to Work (in Minutes) of Worker
+*	B08015_001 = Aggregate number of vehicles (car, truck, or van) used in commuting by worker
+
+
+```{r, cache=TRUE}
+# Load searchable table of variables
+var_acs23 <- load_variables(year = 2023, dataset = "acs5", cache = TRUE)
+# View(var_acs23)
+
+acs23 <- get_acs(
+  geography = "county", survey = "acs5", year = 2023, output="wide", geometry =TRUE, keep_geo_vars=TRUE,
+  variables = c(
+    # Demographics 
+    "B01001_001", "B09001_001", "B01002_001", "B02001_002", "B05001_002", "B27001_001", "B28001_002",
+    # Housing/Geographical Mobility
+    "B25001_001", "B11016_010", "B07001_049","B07001_065", "B07101_001",
+    # Income
+    "B19013_001", "B10059_002", "B17011_001", "B19083_001", "B09010_001", "B09010_002", "B22010_001", "B22010_002",
+    # Education
+    "B14001_002", "B15003_018", "B15003_022", "B15003_023", "B15003_024", "B15003_025",
+    # Occupation
+    "B24011_023", "B24011_033", "B24011_030", # Detailed Occupation removed (all NA)
+    # Commuting
+    "B08006_001E", "B08006_008", "B08006_014", "B08006_015", "B08013_001", "B08015_001"
+  ), progress_bar = FALSE) 
+
+# Population from 2018
+acs18 <- get_acs(geography = "county", survey = "acs5", year = 2018, output="wide", variables = "B01001_001")
+
+# CT Transitions from counties to planning regions
+# https://appliedgeographic.com/2023/04/changing-of-the-counties/ 
+# acs23[which(!acs23$GEOID %in% acs18$GEOID),"NAME.x"]
+```
+
+### Get Population Estimates
+
+```{r}
+# get_estimates(), an interface to the Population Estimates APIs
+pop23 <- get_estimates(geography = "county", product = "population", 
+                       vintage = 2023, time_series = TRUE, output="wide")
+# Cannot match this with acs 
+which(!acs23$GEOID %in% pop23$GEOID) %>% length()
+```
+
+### Combine ACS Data and Calculate Variables
+
+```{r}
+cnsdt <- left_join(acs23, acs18, by=c("GEOID")) %>% 
+  select(GEOID, NAMELSAD, STUSPS, STATEFP, ALAND, B01001_001E.y, B01001_001E.x, ends_with("E")) %>% #head()
+  transmute(
+    geoid = GEOID, county = NAMELSAD, state = STATE_NAME, stateN = STATEFP,
+    # Population
+    pop_2023 = B01001_001E.x, pop_density = pop_2023/(ALAND/2.59e+6),
+    pop_2018 = B01001_001E.y, pop_change = (pop_2023-pop_2018)/pop_2018*100,
+    # Demographics
+    median_age =	B01002_001E, children =	B09001_001E/pop_2023,
+    race_white = B02001_002E/pop_2023, born_citizen = B05001_002E/pop_2023, 
+    health_insured = B27001_001E/pop_2023, 
+    # Housing
+    housing_units = B25001_001E, single_household = B11016_010E/housing_units, 
+    moved = (B07001_049E + B07001_065E)/pop_2023,
+    # Education
+    school = B14001_002E/pop_2023, higher_ed = (B15003_022E + B15003_023E + B15003_024E + B15003_025E)/pop_2023, has_computer = B28001_002E/pop_2023, 
+     # Income
+    median_income = B19013_001E, gini_inequality = B19083_001E, ssi_receipt = B09010_002E/B09010_001E, snap_receipt = B22010_002E/B22010_001E,
+    # income_support = B09010_002E/pop_2023, snap_elder = B22001_002E/ pop_2023, snap_children = B22002_001E/pop_2023, 
+    # Commuting
+    commute_cars = B08015_001E/B08006_001E, commute_carfree = (B08006_008E + B08006_014E + B08006_015E)/B08006_001E,
+    # Occupation
+    food_worker = B24011_023E, transport_worker = B24011_033E, farm_worker= B24011_030E
+  ) %>% 
+  # focus on US mainland only 
+  filter(!stateN %in% c("02","15","72","60","81","07","64","14","66","69")) %>% select(-stateN) %>% 
+  st_transform('EPSG:3082')
+
+# Example
+ggplot() + geom_sf(data = cnsdt, aes(fill=pop_density), color=NA) +
+  scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1, breaks=c(1,100,10000)) + 
+  geom_sf(data = map, color="gray", fill=NA) + theme_void()
+
+ggplot() + geom_sf(data = cnsdt, aes(fill=snap_receipt), color=NA) +
+    scale_fill_gradient(low = "lightyellow", high = "purple3")+ 
+  geom_sf(data = map, color="gray", fill=NA) + theme_void()
+
+```
+
+## Get Data from Economic Census
+
+### Select Variables of Interest 
+
+* time: YEAR
+* location: GEO_ID, COUNTY, STATE, REGION,  
+* type: 
+    - NAICS2022
+    - SECTOR,SUBSECTOR = NAICS economic sector
+    - INDLEVEL, INDGROUP = Industry (Group)
+* number: 
+    - ESTAB,FIRM = Number of establishments, firms
+    - EMP Number of employees
+* INVTOTE = Total inventories, end of year ($1,000)
+* INVTOTB = Total inventories, beginning of year ($1,000)
+* RCPTOT = Sales, value of shipments, or revenue ($1,000)
+* RCPTOT_IMP Range indicating imputed percentage of total sales, value of shipments, or revenue 
+
+### Select Industries of Interest using NAICS Code
+
+NAICS Code Drill-Down Table: https://www.naics.com/search/#naics
+
+* 311 = Food manufacturing, excl 3116 Animal Slaughtering and Processing if possible
+* 312 = Beverage Manufacturing (3121) and Tobacco Manufacturing (3122; n=479 minor)
+* 445 = Food retail 
+    - 4451 = Grocery and Convenience Retailers, majority Supermarkets and Other Grocery (except Convenience) Stores (445110)
+    - 4452 = Specialty Food Retailers
+    - 4453 = Beer, Wine, and Liquor Retailers
+* 562 = Waste Services
+    - 5621 = Waste Collection (10,879)
+    - 5622 = Waste Treatment and Disposal (4,479)
+    - 5629 = Remediation and Other Waste Management Services (32,766)
+    
+Variables: 
+
+* ESTAB (fclty) = number of establishments, refers to the count of individual physical business locations, 
+* FIRM (cmpny)= number of firms, represents the total count of companies
+* EMP (emply) = number of employees
+* RCPTOT (sales) = Sales, value of shipments, or revenue ($1,000)
+
+```{r, cache=TRUE}
+# Get all available APIs 
+# listCensusApis() %>% View()
+
+# Select variables from economic census 
+# listCensusMetadata(name = "ecnbasic", vintage = 2022) %>% View()
+ecn22 <- getCensus(name = "ecnbasic", vintage = 2022, region = "county:*", key = census_key, 
+                   vars = c("GEO_ID", "NAICS2022","SECTOR", "SUBSECTOR", "INDLEVEL","INDGROUP",
+                            "ESTAB","FIRM", "EMP", "RCPTOT","RCPTOT_IMP","INVTOTB","INVTOTE")) 
+
+ecndt <- ecn22 %>% 
+  filter(SUBSECTOR %in% c("311","312","445","562") & INDLEVEL == 3) %>% 
+  transmute(
+    geoid = paste0(state,county),
+    naics = case_when(SUBSECTOR == "311" ~ "food",  # Food Manufacturing
+                      SUBSECTOR == "312" ~ "bvrg",  # Beverage and Tobacco Manufacturing
+                      SUBSECTOR == "445" ~ "retail",# Retail 
+                      SUBSECTOR == "562" ~ "waste"),# Waste Services
+    fclty = ESTAB %>% as.numeric,
+    emply = EMP%>% as.numeric,
+    sales = RCPTOT %>% as.numeric # Sales, value of shipments , or revenue ($1,000)  
+  ) %>% 
+  pivot_wider(id_cols = geoid, names_from = naics, values_from = c(fclty,emply,sales), values_fill = 0)
+
+# Example
+left_join(cnsdt, ecndt, by = 'geoid') %>% ggplot() + 
+  geom_sf(aes(fill=fclty_retail), color=NA) +
+  scale_fill_gradient(low = "lightyellow", high = "purple3", na.value = "whitesmoke", trans="log1p", breaks=c(0,10,100,1000))+ 
+  geom_sf(data = map, color="gray", fill=NA) + theme_void()
+```
+
+Other available APIs: 
+
+* cbp = County Business Patterns
+* zbp = Zip Code Business Patterns:
+* ewks = Economic Census - All Sectors: Economy-Wide Key Statistics
+* ecnbasic = Economic Census: Summary Statistics for the U.S., States, and Selected Geographies: 2022
+* ecntypop = Economic Census: Wholesale Trade: Detailed Type of Operation for the U.S.: 2022
+
+```{r, cache=TRUE}
+# Get all available APIs 
+# listCensusApis() %>% View()
+# Select variables 
+listCensusMetadata(name = "cbp", vintage = 2022) %>% View()
+listCensusMetadata(name = "abscs", vintage = 2022) %>% View()
+
+ecn22 <- getCensus(name = "ecnbasic", vintage = 2022, region = "county:*", key = census_key, 
+                   vars = c("GEO_ID", "NAICS2022","SECTOR", "SUBSECTOR", "INDLEVEL","INDGROUP",
+                            "ESTAB","FIRM", "EMP", "RCPTOT","RCPTOT_IMP","INVTOTB","INVTOTE")) 
+```
+
+## Get Data from USDA Census
+
+Part of the 2022 Economic Census data is conducted by USDA (NAICS 11 - Agriculture, Forestry, Fishing and Hunting), see https://quickstats.nass.usda.gov
+
+```{r, cache=TRUE}
+# Economic census doesnt include agriculture
+# ecn22 %>% filter(SUBSECTOR == "112") %>% nrow()
+
+# Collect variables from https://quickstats.nass.usda.gov
+# x <- "AG LAND - NUMBER OF OPERATIONS"#vars[2]
+# tt <- getQuickstat(key = usda_key, program="CENSUS", data_item = x, geographic_level = "COUNTY", domain = "TOTAL", year = "2022") %>% select(state_ansi, county_code, short_desc, unit_desc, Value) 
+
+vars <- c(
+  # Farms and Land in Farms: includes Number of Farms, Land in Farms,
+  "AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - NUMBER OF OPERATIONS", 
+  "AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - ACRES", 
+  # "AG LAND, OWNED, IN FARMS - NUMBER OF OPERATIONS", "AG LAND, OWNED, IN FARMS - ACRES",
+  # "AG LAND, RENTED FROM OTHERS, IN FARMS - NUMBER OF OPERATIONS", "AG LAND, RENTED FROM OTHERS, IN FARMS - ACRES", 
+  # Livestock inventory 
+  "ANIMAL TOTALS, INCL PRODUCTS - OPERATIONS WITH SALES", 
+  "ANIMAL TOTALS, INCL PRODUCTS - SALES, MEASURED IN $", 
+  # Milk Cow Inventory
+  "MILK - OPERATIONS WITH SALES", "MILK - SALES, MEASURED IN $",
+  # Cattle Inventory 
+  "CATTLE, (EXCL COWS) - OPERATIONS WITH INVENTORY", "CATTLE, (EXCL COWS) - INVENTORY", 
+  # Hog/Pig Inventory 
+  "HOGS - OPERATIONS WITH INVENTORY", "HOGS - INVENTORY",
+  # Poultry Inventory 
+  "POULTRY TOTALS - OPERATIONS WITH INVENTORY", "POULTRY TOTALS, INCL EGGS - SALES, MEASURED IN $", 
+  "FEED - EXPENSE, MEASURED IN $")
+
+# Run API
+out <- lapply(vars, FUN = function(x){
+  getQuickstat(key = usda_key, program="CENSUS", data_item = x, geographic_level = "COUNTY", domain = "TOTAL", year = "2022") %>% 
+    select(state_ansi, county_code, short_desc, unit_desc, Value)
+}) %>% bind_rows()
+# out %>% select(short_desc, unit_desc) %>% unique()
+
+usdadt <- out %>% 
+  transmute(
+    geoid = paste0(state_ansi,county_code),
+    desc = case_when(
+      short_desc == "AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - NUMBER OF OPERATIONS" ~ "farms",
+      short_desc == "AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - ACRES" ~ "farms_acres", 
+      short_desc == "ANIMAL TOTALS, INCL PRODUCTS - OPERATIONS WITH SALES" ~ "farms_anmls", 
+      short_desc == "ANIMAL TOTALS, INCL PRODUCTS - SALES, MEASURED IN $" ~ "sales_anmls", 
+      short_desc == "CATTLE, (EXCL COWS) - OPERATIONS WITH INVENTORY" ~ "farms_cattle", 
+      short_desc == "CATTLE, (EXCL COWS) - INVENTORY" ~ "number_cattle", 
+      short_desc == "HOGS - OPERATIONS WITH INVENTORY" ~ "farms_hogs", 
+      short_desc == "HOGS - INVENTORY" ~ "number_hogs", 
+      short_desc == "POULTRY TOTALS - OPERATIONS WITH INVENTORY" ~ "farms_pltry", 
+      short_desc == "POULTRY TOTALS, INCL EGGS - SALES, MEASURED IN $" ~ "sales_pltry", 
+      short_desc == "FEED - EXPENSE, MEASURED IN $" ~ "feed_expns",
+      short_desc == "MILK - OPERATIONS WITH SALES" ~ "farms_milk", 
+      short_desc == "MILK - SALES, MEASURED IN $" ~ "sales_milk"), 
+    val = Value) %>%  
+  pivot_wider(id_cols = geoid, names_from = desc, values_from = val, values_fill = 0) %>% 
+  mutate_at(vars(starts_with(c("sales","feed")),), ~./1000) # sales in mm
+
+# Example
+left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() + 
+  geom_sf(aes(fill=feed_expns), color=NA) +
+  scale_fill_gradient(low = "lightyellow", high = "purple3", na.value = "whitesmoke", 
+                      trans="sqrt", breaks=c(0,100000,500000,1000000), labels=c("0","100,000","500,000","1,000,000"))+
+  geom_sf(data = map, color="gray", fill=NA) + theme_void()
+
+```
+
+### Combine Datasets
+
+```{r}
+# Combine with census 
+cnty <- purrr::reduce(list(cnsdt, ecndt, usdadt), dplyr::left_join, by = 'geoid')
+```
+
+## Add Food Waste Estimates
+
+Estimate total food waste generated using EPA methodology: 
+
+1) Retail: EPA estimates 349 pounds of food waste per capita in retail, food service and residential (2019)
+
+$$
+\text{food waste (retail, TPY)} = 349\ \text{lbs} \times \text{population} \times \frac{\text{tons}}{2,000\ \text{lbs}}
+$$
+
+2) Industrial: EPA estimates 0.095 lbs of food waste for each dollar of sales revenue
+
+$$
+\text{food waste (industrial, TPY)} = 0.095\ \text{lbs} \times \text{sales revenue} (\$) \times \frac{\text{tons}}{2,000\ \text{lbs}}
+$$
+
+* Note that `sales_food`, `sales_bvrg` are annual sales, value of shipments, or revenue measured in $1,000
+* EPA derived generation factor as average from three studies that involved original research (e.g., surveying food manufacturers/directly measuring excess food generated from a sample of food manufacturers). The studies range from 0.053 to 0.17 pounds per dollar of annual industry sales revenue. It should be noted that these studies do not contain specific generation factors for each type of manufacturer or processor.
+
+**Sources:**
+
+* EPA (2023): 2019 Wasted Food Report. https://www.epa.gov/facts-and-figures-about-materials-waste-and-recycling/food-material-specific-data
+* EPA (2025): Excess Food Opportunities Map Version 3.1 – Technical Methodology. https://www.epa.gov/sustainable-management-food/excess-food-opportunities-map
+
+```{r, message=FALSE}
+# Calculate Food waste estimates
+cnty <- cnty %>% 
+  mutate(
+    food_waste_retail = 349 * pop_2023/2000, 
+    food_waste_indstl = 0.095 * rowSums(across(c(sales_food,sales_bvrg)), na.rm = TRUE) * 1000 / 2000,
+    food_waste = food_waste_retail + food_waste_indstl
+  )
+```
+
+## Save Final Dataset
+
+```{r, eval=TRUE}
+library (DBI)
+
+# Connect to snowflake database
+db <- dbConnect(
+  odbc::odbc(), Driver = "SnowflakeDSIIDriver",
+  server = "QCQANBP-MDA59503.snowflakecomputing.com",
+  warehouse = "COMPUTE_WH", database = "CUSTOMER_SUCCESS_EXPERIMENTAL", schema = "PUBLIC",
+  uid= "DJMANITZ", pwd = "Longpassword@snow7", passcode = "265797"
+)
+
+# Add to database
+dbWriteTable(db, "census", cnty, row.names = FALSE, overwrite=TRUE)
+```
+ 
+* `geoid`
+* `county`
+* `state`
+
+American Community Survey (ACS): 
+
+* `pop_2023` Total Population in 2023
+* `pop_density` Population density in 2023.
+* `pop_2018` Total Population in 2018
+* `pop_change` Relative population change 2018-2023.
+* `median_age` Median Age
+* `children` Population Under 18 Years by Age
+* `race_white` Race, Estimate!!Total:!!Whit alone
+* `born_citizen` Nativity and Citizenship Status, born in the United States
+* `health_insured` Health insurance Coverage Status
+* `housing_units` Number of Housing Units
+* `single_household` Proportion of Single person Household (Household size)
+* `moved` Geographical Mobility; Moved from different county within same state or from different state
+* `school` Proportion population enrolled in school
+* `higher_ed` Proportion population with higher education (Bachelor's, Master's, Professional School, Doctorate degree) for Population > 25 Years
+* `has_computer` Has one or more types of computing devices
+* `median_income` Median household income in the past 12 months (in 2023 inflation-adjusted dollars)
+* `gini_inequality` Gini Index of Income Inequality
+* `ssi_receipt` Proportion of households received Supplemental Security Income (SSI), cash public assistance, or Food Stamps/SNAP in the past 12m
+* `snap_receipt` Proportion of households received Food Stamps/SNAP in the past 12 months
+* `commute_cars` Aggregate number of vehicles (car, truck, or van) used in commuting by worker
+* `commute_carfree` Car-free Means of Transportation to Work: Public Transportation, Bicycle, Walked
+
+Economic Census:
+
+* `food_worker` Occupation in Food preparation and serving related occupations
+* `transport_worker` Occupation in Production, transportation, and material moving occupations
+* `farm_worker` Occupation in Farming, fishing, and forestry occupations
+* `fclty_retail` Number of establishments in Food Retail (NAICS: 445), refers to the count of individual physical business locations
+* `fclty_waste` Number of establishments in Waste Services (NAICS: 562), refers to the count of individual physical business locations
+* `fclty_food` Number of establishments in Food manufacturing (NAICS: 311), refers to the count of individual physical business locations
+* `fclty_bvrg` Number of establishments in Beverage 
+* `emply_waste` Number of employees in Waste Services (NAICS: 562)
+* `emply_food` Number of employees in Food manufacturing (NAICS: 311)
+* `emply_bvrg` Number of employees in Beverage Manufacturing (NAICS: 312)
+* `sales_retail` Sales, value of shipments, or revenue ($1,000) by Food Retail (NAICS: 445)
+* `sales_waste` Sales, value of shipments, or revenue ($1,000) by Waste Services (NAICS: 562)
+* `sales_food` Sales, value of shipments, or revenue ($1,000) by Food manufacturing (NAICS: 311)
+* `sales_bvrg` Sales, value of shipments, or revenue ($1,000) by Beverage Manufacturing (NAICS: 312)
+
+USDA Census: 
+
+* `farms` Number of farms with agricultural land, excluding cropland, pastureland and woodland
+* `farms_acres` Acres of agricultural land, excluding cropland, pastureland and woodland
+* `farms_anmls` Number of farms with animal sales, including products  
+* `sales_anmls` Total sales by farm animals and animal products  
+* `farms_milk` Number of dairy farms
+* `sales_milk` Total sales of milk
+* `farms_cattle` Number of cattle farms
+* `number_cattle` Inventory of cattle 
+* `farms_hogs` Number of hog farms
+* `number_hogs` Inventory of hogs
+* `farms_pltry` Number of poultry farms
+* `sales_pltry` Total sales of poultry 
+* `feed_expns` Feed expense, measured in $
+
+Calculated:
+
+* `food_waste_retail` EPA food waste estimate for retail; EPA estimates 349 pounds of food waste per capita in retail, food service and residential (2019)
+* `food_waste_indstl` EPA food waste estimate for industrial: EPA estimates 0.095 lbs of food waste for each dollar of sales revenue
+* `food_waste` Estimated total food waste generated using EPA methodology
+* `food_waste_ban` foodwaste_ban_id, referenced in foodwaste ban dataset.
+* `food_waste_ban2` Binary indicator whether county is affected by a food waste ban.
+
+
+
+## Old: 2019 Census Data from `usdata`
+
+Data for 3142 counties in the United States with many variables of the 2019 American Community Survey. For details on variables see https://rdrr.io/cran/usdata/man/county_2019.html
+We don't use this data anymore
+
+```{r, eval=FALSE}
+data(county_2019)
+cdata <- county_2019 %>% select(
+  state, name, fips, pop, avg_family_size, households, 
+  median_individual_income,median_individual_income_age_25plus,mean_household_income,median_household_income, per_capita_income,
+  white, black, native, asian, pac_isl, hispanic, 
+  median_age, age_under_5, age_over_18, age_over_65, 
+  persons_per_household, housing_one_unit_structures, housing_two_unit_structures, housing_mobile_homes, 
+  mean_work_travel, hs_grad, bachelors,veterans,unemployment_rate,uninsured, 
+  households_speak_limited_english, households_speak_spanish, households_speak_other_indo_euro_lang, households_speak_asian_or_pac_isl, households_speak_other, 
+  poverty, poverty_under_18, poverty_65_and_over,
+  household_has_computer, household_has_smartphone,household_has_broadband
+)
+```
+
+## Closing
+
+```{r}
+sessionInfo()
+```
