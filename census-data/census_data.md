@@ -37,7 +37,7 @@ specifically the TIGER/Line shapefiles (see
 governmental divisions of the US (reduced to mainland)
 
 ``` r
-smap <- tigris::states(progress_bar = FALSE) %>% 
+smap <- tigris::states(progress_bar = FALSE) |> 
   filter(!STATEFP %in% c("02","15","72","60","81","07","64","14","66","69","78")) 
 ```
 
@@ -144,11 +144,9 @@ cnsdt <- get_acs(
     "B19013_001", "B19083_001", 
     # Commuting
     "B08006_001E", "B08006_008", "B08006_014", "B08006_015", "B08013_001"
-  ), progress_bar = FALSE) %>% 
-  
+  ), progress_bar = FALSE) |> 
   # Select Estimates
-  select(GEOID, NAMELSAD, STUSPS, STATEFP, ALAND, B01001_001E, ends_with("E")) %>% 
-  
+  select(GEOID, NAMELSAD, STUSPS, STATEFP, ALAND, B01001_001E, ends_with("E")) |> 
   # Calculate Variables
   transmute(
     geoid = GEOID, county = NAMELSAD, state = STATE_NAME, stateN = STATEFP,
@@ -170,9 +168,9 @@ cnsdt <- get_acs(
     # Commuting
     commute_time = B08013_001E, 
     commute_carfree = (B08006_008E + B08006_014E + B08006_015E)/B08006_001E
-  ) %>% 
+  ) |> 
   # focus on US mainland only 
-  filter(!stateN %in% c("02","15","72","60","81","07","64","14","66","69")) %>% select(-stateN) %>% 
+  filter(!stateN %in% c("02","15","72","60","81","07","64","14","66","69")) |> select(-stateN) |> 
   st_transform('EPSG:4269')
 ```
 
@@ -319,14 +317,14 @@ drill-down table (https://www.naics.com/search/#naics), e.g. NAICS Code
 ecndt <- getCensus(
   name = "ecnbasic", vintage = 2022, region = "county:*", key = census_key, 
   vars = c("GEO_ID", "NAICS2022", "SECTOR", "SUBSECTOR", "INDLEVEL", "INDGROUP",
-           "ESTAB", "EMP", "RCPTOT")) %>% 
+           "ESTAB", "EMP", "RCPTOT")) |> 
   # select utility businesses only
-  filter(SECTOR == "62" & INDLEVEL == 2) %>% 
+  filter(SECTOR == "62" & INDLEVEL == 2) |> 
   transmute(
     geoid = paste0(state, county),
-    fclty = ESTAB %>% as.numeric, # Number of establishments
-    emply = EMP %>% as.numeric,   # Number of employees
-    sales = RCPTOT %>% as.numeric # Sales, value of shipments , or revenue ($1,000)  
+    fclty = ESTAB |> as.numeric(), # Number of establishments
+    emply = EMP |> as.numeric(),   # Number of employees
+    sales = RCPTOT |> as.numeric() # Sales, value of shipments , or revenue ($1,000)  
   ) 
 ```
 
@@ -352,7 +350,7 @@ Number of establishments, refers to the count of individual physical
 business locations,
 
 ``` r
-left_join(cnsdt, ecndt, by = 'geoid') %>% 
+left_join(cnsdt, ecndt, by = 'geoid') |> 
   ggplot() + theme_void() + 
     geom_sf(aes(fill=fclty), color=NA) +
     scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
@@ -366,7 +364,7 @@ left_join(cnsdt, ecndt, by = 'geoid') %>%
 Number of employees
 
 ``` r
-left_join(cnsdt, ecndt, by = 'geoid') %>% 
+left_join(cnsdt, ecndt, by = 'geoid') |> 
   ggplot() + theme_void() + 
     geom_sf(aes(fill=emply), color=NA) +
     scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
@@ -380,7 +378,7 @@ left_join(cnsdt, ecndt, by = 'geoid') %>%
 Sales, value of shipments, or revenue (\$1,000)
 
 ``` r
-left_join(cnsdt, ecndt, by = 'geoid') %>% 
+left_join(cnsdt, ecndt, by = 'geoid') |> 
   ggplot() + theme_void() + 
     geom_sf(aes(fill=sales), color=NA) +
     scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
@@ -422,11 +420,11 @@ vars <- c(
 
 # Run API
 out <- lapply(vars, FUN = function(x){
-  getQuickstat(key = usda_key, program="CENSUS", data_item = x, geographic_level = "COUNTY", domain = "TOTAL", year = "2022") %>% 
+  getQuickstat(key = usda_key, program="CENSUS", data_item = x, geographic_level = "COUNTY", domain = "TOTAL", year = "2022") |> 
     select(state_ansi, county_code, short_desc, unit_desc, Value)
-}) %>% bind_rows()
+}) |> bind_rows()
 
-usdadt <- out %>% 
+usdadt <- out |> 
   transmute(
     geoid = paste0(state_ansi,county_code),
     desc = case_when(
@@ -435,8 +433,8 @@ usdadt <- out %>%
       short_desc == "ANIMAL TOTALS, INCL PRODUCTS - OPERATIONS WITH SALES" ~ "farms_anmls", 
       short_desc == "ANIMAL TOTALS, INCL PRODUCTS - SALES, MEASURED IN $" ~ "sales_anmls", 
       short_desc == "FEED - EXPENSE, MEASURED IN $" ~ "feed_expns"),
-    val = Value) %>%  
-  pivot_wider(id_cols = geoid, names_from = desc, values_from = val, values_fill = 0) %>% 
+    val = Value) |>  
+  pivot_wider(id_cols = geoid, names_from = desc, values_from = val, values_fill = 0) |> 
   mutate_at(vars(starts_with(c("sales","feed")),), ~./1000) # sales in mm
 ```
 
@@ -464,7 +462,7 @@ variables.
 #### Number of Farms
 
 ``` r
-left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() + 
+left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
   geom_sf(aes(fill=farms), color=NA) +
   scale_fill_gradient(low="lightyellow", high="purple3", trans="sqrt", na.value="whitesmoke")+
   geom_sf(data = smap, color="darkgray", fill=NA) + theme_void()
@@ -477,7 +475,7 @@ left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() +
 Total sales by farm animals and animal products
 
 ``` r
-left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() + 
+left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
   geom_sf(aes(fill=sales_anmls), color=NA) +
   scale_fill_gradient(low = "lightyellow", high = "purple3", na.value = "whitesmoke", trans="sqrt",
                       breaks=c(0,100000,1000000,3000000), labels=c("0","100,000","1,000,000","3,000,000"))+
@@ -489,7 +487,7 @@ left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() +
 #### Feed Expense
 
 ``` r
-left_join(cnsdt, usdadt, by = 'geoid') %>% ggplot() + 
+left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
   geom_sf(aes(fill=feed_expns), color=NA) +
   scale_fill_distiller(palette="PRGn", trans="log10", direction=-1, na.value="whitesmoke", 
                        breaks=c(100,10000,1000000), labels=c("100","10,000","1,000,000")) + 
