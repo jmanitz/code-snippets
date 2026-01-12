@@ -1,0 +1,168 @@
+---
+title: "EPA Excess Food Data"
+author: "Juliane Manitz"
+date: "`r Sys.Date()`"
+format: 
+  gfm:
+    prefer-html: true
+editor: visual
+toc: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+#| echo: false
+
+require(readxl)
+require(tidyverse)
+require(stringr)
+require(reactable)
+require(plotly)
+require(ggchicklet)
+require(sf)
+require(tidygeocoder)
+
+source("utils.R") # clean_str(), clean_name(), add_latlng()
+```
+
+## Overview
+
+The US [EPA's Excess Food Opportunities Map](https://www.epa.gov/sustainable-management-food/excess-food-opportunities-map) is a national-scale interactive portal that maps excess food generators (e.g., grocery stores, restaurants, schools) and recipients (e.g., food banks, anaerobic digestion and composting facilities) along with data on related infrastructure. The location, contact information, and estimates of excess food generation are beneficial to stakeholders working on food waste reduction and organics recycling including NGOs, researchers, and facility owners, operators, and designers striving to enhance the recovery and recycling of these materials for a more sustainable food management system.
+
+## Read and Process Data
+
+Data source (last version from September 2025): <https://epa.maps.arcgis.com/home/item.html?id=62103e6a6f004217b9ee49fdfd1c2615>
+
+**Helper Functions from utils.R**
+
+-   `clean_str` clean generic strings by removing special characters, extra whitespaces, trailing s
+-   `clean_name` clean company names by cleaning string and non-informative name additions like 'Co.', 'Inc.', 'LLC'
+-   `add_latlng` add longitude and latitude by geocoding addresses
+
+**Read Food Manufacturing Data**
+
+To exemplify EPA excess food data, we look at facilities that manufacture or process food. Look up NAICS codes and respective industries of interest using the [NAICS drill-down table](https://www.naics.com/search/#naics):
+
+-   3111 - Animal Food Manufacturing (n=2,537)
+-   3112 - Grain and Oilseed Milling (n=2,520)
+-   3113 - Sugar and Confectionery Product Manufacturing(n=2,635)
+-   3114 - Fruit and Vegetable Preserving and Specialty Food Manufacturing (n=4,384)
+-   3115 - Dairy Product Manufacturing (n=4,978)
+-   3116 - Animal Slaughtering and Processing (n=4,695)
+-   3117 - Seafood Product Preparation and Packaging (n=1,004)
+-   3118 - Bakeries and Tortilla Manufacturing (n=7,932)
+-   3119 - Other Food Manufacturing (n=12,195)
+-   3121 - Beverage Manufacturing (n=19,371)
+
+```{r}
+#| cache: true 
+fmdt <- read_excel("../EPA_Data/FoodManufacturersAndProcessors.xlsx", sheet=2) |>
+  # Preprocess EPA Data 
+  transmute(
+      Org_Name = clean_name(Name),
+      NAICS6 = paste(`NAICS Code`,"-",`NAICS Code Description`), 
+      NAICS4 = case_when(
+                str_starts(`NAICS Code`, "3111") ~ "3111 - Animal Food Mfg",
+                str_starts(`NAICS Code`, "3112") ~ "3112 - Grain/Oilseed Milling",
+                str_starts(`NAICS Code`, "3113") ~ "3113 - Sugar/Confectionery",
+                str_starts(`NAICS Code`, "3114") ~ "3114 - Fruit/Veg Preserving",
+                str_starts(`NAICS Code`, "3115") ~ "3115 - Dairy Product Mfg",
+                str_starts(`NAICS Code`, "3116") ~ "3116 - Meat Product Mfg",
+                str_starts(`NAICS Code`, "3117") ~ "3117 - Seafood Product Mfg",
+                str_starts(`NAICS Code`, "3118") ~ "3118 - Bakeries/Tortilla Mfg",
+                str_starts(`NAICS Code`, "3119") ~ "3119 - Other Food Mfg",
+                str_starts(`NAICS Code`, "3121") ~ "3121 - Beverage Mfg"),
+      Address = paste0(str_replace_na(Address,"")," ",City,", ", 
+                       State, " ", str_replace_na(`Zip Code`,"")), 
+      postcode = `Zip Code`, 
+      county = str_to_title(County), 
+      state = str_to_upper(State), 
+      lat=NA, lng=NA,  
+      Source = paste0("EPA data ", ifelse(is.na(Website),"",Website)), 
+      ExcessFood = `Excess Food Estimate, High (tons per year)`) 
+```
+
+## Food Waste by Industries
+
+Calculations to estimate annual excess food estimates for each establishment are sector-specific and use business statistics like number of employees, annual revenue,number of students (for educational institutions), capacity (for correctional facilities), and number of beds (for healthcare facilities). More details are described in [EPA’s 2023 publication: EPA Excess Food Opportunities Map Version 3 - Technical Methodology](Technical%20Methodology%20for%20the%20Excess%20Food%20Opportunities%20Map:%20https://www.epa.gov/sustainable-management-food/technical-methodology-excess-food-opportunities-map).
+
+```{r}
+fmdt |> group_by(NAICS4) |>
+  summarise(ExcessFood = sum(ExcessFood, na.rm = TRUE)) |>
+  ungroup() |> 
+  ggplot() + theme_minimal() +
+  geom_chicklet(aes(x = reorder(NAICS4, desc(ExcessFood)), y = ExcessFood),
+           stat="identity", color = "gray80", fill="#29AF7FFF") + 
+  scale_y_continuous(labels = scales::label_comma()) + scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.9)) + 
+  labs(y="Excess Food (TPY)", x="")
+
+fmdt |> group_by(NAICS6) |>
+  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm=TRUE) |> round(0)) |>
+  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
+            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
+            columns = list(NAICS6 = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
+```
+
+## Map Fruit/Veg Preservation
+
+```{r}
+#| cache: true
+
+# Load state map
+smap <- tigris::states(progress_bar = FALSE) |>
+  filter(!STATEFP %in% c("02","15","72","60","81","07","64","14","66","69","78")) 
+
+# subset data
+vegdt <- fmdt |> filter(!state %in% c("AK", "HI", "PR")) |>
+  filter(NAICS4 == "3114 - Fruit/Veg Preserving") |>
+  add_latlng() |> st_as_sf(coords=c("lng","lat"), remove=FALSE, crs="EPSG:4269") |>
+  mutate(lbl = paste(Org_Name, NAICS6, Address, paste0("Food Waste: ", round(ExcessFood,0),"TPY"), sep="<br>"))
+
+# Plot data 
+{ggplot() + theme_void() + 
+  geom_sf(data = smap, color="lightgray", fill="whitesmoke") +      
+  geom_sf(data = vegdt, aes(size = ExcessFood, text=lbl), color="#29AF7FFF", shape=20, alpha=0.6) +
+  labs(title = "EPA Fruit/Veg Preservation")} |>
+  ggplotly(tooltip = "text")
+```
+
+## Top Company Names
+
+Note that when preprocessing the data, the company names provided by EPA have been cleaned by removing special characters, trailing 's and non-informative name additions like 'Co.', 'Inc.', 'LLC'.
+
+```{r}
+fmdt |> group_by(Org_Name) |>
+  summarize(ExcessFood = sum(ExcessFood, na.rm = TRUE)) |>
+  wordcloud2::wordcloud2(rotateRatio=0)
+  
+fmdt |> group_by(Org_Name) |>
+  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm = TRUE) |> round(0)) |>
+  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
+            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
+            columns = list(Org_Name = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
+```
+
+## Food Waste by State
+
+```{r, fig.width=10}
+fmdt |> group_by(state, NAICS4) |>
+  summarise(ExcessFood = sum(ExcessFood, na.rm = TRUE)) |>
+  ungroup() |>  
+  ggplot() + theme_minimal() +
+  geom_bar(aes(x = reorder(state, desc(ExcessFood)), y = ExcessFood, fill=NAICS4),
+           stat="identity", color = "gray80") + 
+  scale_y_continuous(labels = scales::label_comma()) + scale_fill_viridis_d() + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.9), legend.position = c(.8,.6)) + 
+  labs(y="Excess Food (TPY)", x="")
+
+```
+
+## Session Information
+
+```{r}
+sessionInfo()
+```
