@@ -2,9 +2,7 @@
 title: "Working with US Census Data"
 author: "Juliane Manitz"
 date: "`r Sys.Date()`"
-format: 
-  gfm:
-    prefer-html: true
+format: gfm
 editor: visual
 toc: true
 execute:
@@ -32,10 +30,6 @@ source("../read_keys.R") # API keys
 ## United States Map Shapefiles
 
 We are utilizing the `tigris` package, which provides a convenient way to access and work with geographic data from the US Census Bureau, specifically the TIGER/Line shapefiles (see <https://www.census.gov/cgi-bin/geo/shapefiles/index.php> for details).
-
-```{r}
-
-```
 
 **States boundaries:** States and equivalent entities are the primary governmental divisions of the US (reduced to mainland)
 
@@ -281,7 +275,6 @@ To filter industries of interest with NAICS Codes, we are using the drill-down t
 #### Source Code
 
 ```{r}
-#| cache: true 
 # Select variables from economic census 
 ecndt <- getCensus(
   name = "ecnbasic", vintage = 2022, region = "county:*", key = census_key, 

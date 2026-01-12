@@ -1,6 +1,6 @@
 # Working with US Census Data
 Juliane Manitz
-2025-12-12
+2026-01-12
 
 - [United States Map Shapefiles](#united-states-map-shapefiles)
 - [American Community Survey](#american-community-survey)
@@ -76,7 +76,7 @@ ggplot() + theme_void() +
   geom_sf(data = hwy, fill=NA, color="blue", lty=1) 
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-7-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-6-1.png)
 
 ## American Community Survey
 
@@ -229,7 +229,7 @@ ggplot() + theme_void() +
   geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-9-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-8-1.png)
 
 #### Median Age
 
@@ -242,7 +242,7 @@ ggplot() + theme_void() +
   geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-10-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-9-1.png)
 
 #### Education
 
@@ -256,7 +256,7 @@ ggplot() + theme_void() +
   geom_sf(data = smap, color="darkgray", fill=NA) 
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-11-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-10-1.png)
 
 #### Income
 
@@ -269,7 +269,7 @@ ggplot() + theme_void() +
   geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-12-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-11-1.png)
 
 #### Commuting
 
@@ -282,7 +282,7 @@ ggplot() + theme_void() +
   geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-13-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-12-1.png)
 
 </div>
 
@@ -357,7 +357,7 @@ left_join(cnsdt, ecndt, by = 'geoid') |>
     geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-15-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-14-1.png)
 
 #### Employees
 
@@ -371,7 +371,7 @@ left_join(cnsdt, ecndt, by = 'geoid') |>
     geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-16-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-15-1.png)
 
 #### Sales
 
@@ -385,7 +385,7 @@ left_join(cnsdt, ecndt, by = 'geoid') |>
     geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-17-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-16-1.png)
 
 </div>
 
@@ -468,7 +468,7 @@ left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() +
   geom_sf(data = smap, color="darkgray", fill=NA) + theme_void()
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-19-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-18-1.png)
 
 #### Animal Product Sales
 
@@ -482,7 +482,7 @@ left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() +
   geom_sf(data = smap, color="gray", fill=NA) + theme_void()
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-20-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-19-1.png)
 
 #### Feed Expense
 
@@ -494,7 +494,7 @@ left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() +
   geom_sf(data = smap, color="darkgray", fill=NA) + theme_void()
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-21-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-20-1.png)
 
 </div>
 
