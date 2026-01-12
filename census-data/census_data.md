@@ -2,14 +2,39 @@
 Juliane Manitz
 2026-01-12
 
+- [Overview](#overview)
 - [United States Map Shapefiles](#united-states-map-shapefiles)
 - [American Community Survey](#american-community-survey)
-  - [Example Plots](#example-plots)
+  - [Derived Variables](#derived-variables)
+  - [Source Code](#source-code)
+  - [Example Plot: Commuting](#example-plot-commuting)
 - [Economic Census](#economic-census)
-  - [Example: Healthcare Industry](#example-healthcare-industry)
+  - [Select Variables](#select-variables)
+  - [Source Code](#source-code-1)
+  - [Example Plot: Healthcare Industry
+    Facilities](#example-plot-healthcare-industry-facilities)
+  - [Other available APIs:](#other-available-apis)
 - [USDA Census](#usda-census)
+  - [Derived Variables](#derived-variables-1)
+  - [Source Code](#source-code-2)
+  - [Example Plot: Feed Expense](#example-plot-feed-expense)
 - [Combine Datasets](#combine-datasets)
 - [Session Information](#session-information)
+
+## Overview
+
+This project illustrates retrieval and processing of United States
+Census Bureau data for data scientists, who need to automate the
+collection of demographic information.
+
+The code snippets use different `R` packages to combine different data
+sources:
+
+- `tigris` for US map shapefiles,
+- `tidycensus` for US Census Data from American Community Survey,
+- `censusapi` for US Economic Census Data, and
+- `tidyUSDA` for United States Department of Agriculture (USDA) Census
+  Data.
 
 ``` r
 require(tidyverse)
@@ -91,9 +116,7 @@ data every year. It surveys a sample of 3.5m households, asking about
 social (education, language), demographic (age, race), economic (income,
 employment), and housing (costs, internet access) characteristics.
 
-<div class="panel-tabset">
-
-#### Derived Variables
+### Derived Variables
 
 **Demographics**
 
@@ -128,7 +151,10 @@ employment), and housing (costs, internet access) characteristics.
 - `commute_carfree` Car-free Means of Transportation to Work: Public
   Transportation, Bicycle, Walked
 
-#### Source Code
+See complete list of Source ACS Variables:
+https://api.census.gov/data/2023/acs/acs5/variables.html
+
+### Source Code
 
 ``` r
 cnsdt <- get_acs(
@@ -174,126 +200,24 @@ cnsdt <- get_acs(
   st_transform('EPSG:4269')
 ```
 
-#### Source ACS Variables
-
-**Demographics**
-
-- B01001_001 = Total Population
-- B01002_001 = Median Age
-- B05001_002 = Nativity and Citizenship Status, born in the United
-  States
-
-**Housing**
-
-- B25001_001 = Housing Units
-- B11016_010 = Single person Household (Household size)
-
-**Education**
-
-- B14001_002 = Total enrolled in school
-- B15003_022 = Bachelor’s degree for Population \> 25 Years
-- B15003_023 = Master’s degree for Population \> 25 Years
-- B15003_024 = Professional school degree for Population \> 25 Years
-- B15003_025 = Doctorate degree for Population \> 25 Years
-
-**Income**
-
-- B19013_001 = Median household income in the past 12 months (in 2023
-  inflation-adjusted dollars)
-- B19083_001 = Gini Index of Income Inequality
-
-**Commuting**
-
-- B08006_008 = Means of Transportation to Work: Public Transportation
-- B08006_014 = Means of Transportation to Work: Bicycle
-- B08006_015 = Means of Transportation to Work: Walked
-- B08013_001 = Aggregate Travel Time to Work (in Minutes) of Worker
-
-See complete list of variables:
-https://api.census.gov/data/2023/acs/acs5/variables.html
-
-</div>
-
-### Example Plots
-
-<div class="panel-tabset">
-
-#### Population
-
-Total Population in 2023
+### Example Plot: Commuting
 
 ``` r
 ggplot() + theme_void() + 
-  geom_sf(data = cnsdt, aes(fill=pop_2023), color=NA) +
+  labs(title="Aggregate Travel Time to Work (in Minutes) of Worker") +
+  geom_sf(data = cnsdt, aes(fill=commute_time), color=NA) +
   scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
   geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
 ![](census_data_files/figure-commonmark/unnamed-chunk-8-1.png)
 
-#### Median Age
-
-Median Age
-
-``` r
-ggplot() + theme_void() + 
-  geom_sf(data = cnsdt, aes(fill=median_age), color=NA) +
-  scale_fill_distiller(palette = "PRGn", trans="log10", direction=-1) + 
-  geom_sf(data = smap, color="darkgray", fill=NA)
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-9-1.png)
-
-#### Education
-
-Proportion population with higher education (Bachelor’s, Master’s,
-Professional School, Doctorate degree) for Population \> 25 Years
-
-``` r
-ggplot() + theme_void() + 
-  geom_sf(data = cnsdt, aes(fill=higher_ed), color=NA) +
-  scale_fill_distiller(palette = "PRGn", trans = "log10") + 
-  geom_sf(data = smap, color="darkgray", fill=NA) 
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-10-1.png)
-
-#### Income
-
-Gini Index of Income Inequality
-
-``` r
-ggplot() + theme_void() + 
-  geom_sf(data = cnsdt, aes(fill=gini_inequality), color=NA) +
-  scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
-  geom_sf(data = smap, color="darkgray", fill=NA)
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-11-1.png)
-
-#### Commuting
-
-Aggregate Travel Time to Work (in Minutes) of Worker
-
-``` r
-ggplot() + theme_void() + 
-  geom_sf(data = cnsdt, aes(fill=commute_time), color=NA) +
-  scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
-  geom_sf(data = smap, color="darkgray", fill=NA)
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-12-1.png)
-
-</div>
-
 ## Economic Census
 
 We retrieve data from the economic census using `censusapi`, which a
 wrapper for the US Census Bureau APIs.
 
-<div class="panel-tabset">
-
-#### Select Variables
+### Select Variables
 
 - time: YEAR
 - location: GEO_ID, COUNTY, STATE, REGION,  
@@ -310,7 +234,7 @@ To filter industries of interest with NAICS Codes, we are using the
 drill-down table (https://www.naics.com/search/#naics), e.g. NAICS Code
 = 62 for healthcare industry
 
-#### Source Code
+### Source Code
 
 ``` r
 # Select variables from economic census 
@@ -328,23 +252,7 @@ ecndt <- getCensus(
   ) 
 ```
 
-#### Other available APIs:
-
-- cbp = County Business Patterns
-- zbp = Zip Code Business Patterns:
-- ewks = Economic Census - All Sectors: Economy-Wide Key Statistics
-- ecnbasic = Economic Census: Summary Statistics for the U.S., States,
-  and Selected Geographies: 2022
-- ecntypop = Economic Census: Wholesale Trade: Detailed Type of
-  Operation for the U.S.: 2022
-
-</div>
-
-### Example: Healthcare Industry
-
-<div class="panel-tabset">
-
-#### Facilities
+### Example Plot: Healthcare Industry Facilities
 
 Number of establishments, refers to the count of individual physical
 business locations,
@@ -357,37 +265,17 @@ left_join(cnsdt, ecndt, by = 'geoid') |>
     geom_sf(data = smap, color="darkgray", fill=NA)
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-14-1.png)
+![](census_data_files/figure-commonmark/unnamed-chunk-10-1.png)
 
-#### Employees
+### Other available APIs:
 
-Number of employees
-
-``` r
-left_join(cnsdt, ecndt, by = 'geoid') |> 
-  ggplot() + theme_void() + 
-    geom_sf(aes(fill=emply), color=NA) +
-    scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
-    geom_sf(data = smap, color="darkgray", fill=NA)
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-15-1.png)
-
-#### Sales
-
-Sales, value of shipments, or revenue (\$1,000)
-
-``` r
-left_join(cnsdt, ecndt, by = 'geoid') |> 
-  ggplot() + theme_void() + 
-    geom_sf(aes(fill=sales), color=NA) +
-    scale_fill_distiller(palette = "PRGn", trans="log10", direction = -1) + 
-    geom_sf(data = smap, color="darkgray", fill=NA)
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-16-1.png)
-
-</div>
+- cbp = County Business Patterns
+- zbp = Zip Code Business Patterns:
+- ewks = Economic Census - All Sectors: Economy-Wide Key Statistics
+- ecnbasic = Economic Census: Summary Statistics for the U.S., States,
+  and Selected Geographies: 2022
+- ecntypop = Economic Census: Wholesale Trade: Detailed Type of
+  Operation for the U.S.: 2022
 
 ## USDA Census
 
@@ -396,9 +284,7 @@ Agriculture, Forestry, Fishing and Hunting). We used the `tidyUSDA`
 package, which is a tool for gathering USDA data for analysis and
 visualization, providing an API to pull data from NASS QuickStats.
 
-<div class="panel-tabset">
-
-#### Derived Variables
+### Derived Variables
 
 - `farms` Number of farms with agricultural land, excluding cropland,
   pastureland and woodland
@@ -408,7 +294,10 @@ visualization, providing an API to pull data from NASS QuickStats.
 - `sales_anmls` Total sales by farm animals and animal products
 - `feed_expns` Feed expense, measured in \$
 
-#### Source Code
+See https://quickstats.nass.usda.gov, to view details on available
+variables.
+
+### Source Code
 
 ``` r
 vars <- c(
@@ -438,53 +327,7 @@ usdadt <- out |>
   mutate_at(vars(starts_with(c("sales","feed")),), ~./1000) # sales in mm
 ```
 
-#### USDA Source Variables
-
-- Farms and Land in Farms: includes Number of Farms, Land in Farms,
-  - AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - NUMBER OF
-    OPERATIONS
-  - AG LAND, (EXCL CROPLAND & PASTURELAND & WOODLAND) - ACRES
-- Livestock inventory
-  - ANIMAL TOTALS, INCL PRODUCTS - OPERATIONS WITH SALES
-  - ANIMAL TOTALS, INCL PRODUCTS - SALES, MEASURED IN \$
-- Feed Expense
-  - FEED - EXPENSE, MEASURED IN \$
-
-See https://quickstats.nass.usda.gov, to view details on available
-variables.
-
-</div>
-
-#### Example Plots
-
-<div class="panel-tabset">
-
-#### Number of Farms
-
-``` r
-left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
-  geom_sf(aes(fill=farms), color=NA) +
-  scale_fill_gradient(low="lightyellow", high="purple3", trans="sqrt", na.value="whitesmoke")+
-  geom_sf(data = smap, color="darkgray", fill=NA) + theme_void()
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-18-1.png)
-
-#### Animal Product Sales
-
-Total sales by farm animals and animal products
-
-``` r
-left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
-  geom_sf(aes(fill=sales_anmls), color=NA) +
-  scale_fill_gradient(low = "lightyellow", high = "purple3", na.value = "whitesmoke", trans="sqrt",
-                      breaks=c(0,100000,1000000,3000000), labels=c("0","100,000","1,000,000","3,000,000"))+
-  geom_sf(data = smap, color="gray", fill=NA) + theme_void()
-```
-
-![](census_data_files/figure-commonmark/unnamed-chunk-19-1.png)
-
-#### Feed Expense
+### Example Plot: Feed Expense
 
 ``` r
 left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() + 
@@ -494,15 +337,15 @@ left_join(cnsdt, usdadt, by = 'geoid') |> ggplot() +
   geom_sf(data = smap, color="darkgray", fill=NA) + theme_void()
 ```
 
-![](census_data_files/figure-commonmark/unnamed-chunk-20-1.png)
-
-</div>
+![](census_data_files/figure-commonmark/unnamed-chunk-12-1.png)
 
 ## Combine Datasets
 
 ``` r
 # Combine with census 
 cnty <- purrr::reduce(list(cnsdt, ecndt, usdadt), dplyr::left_join, by = 'geoid')
+
+save(cnty, file="cnty.RData")
 ```
 
 ## Session Information
@@ -550,5 +393,4 @@ sessionInfo()
     [37] lifecycle_1.0.4    classInt_0.4-11    pkgconfig_2.0.3    pillar_1.11.1     
     [41] gtable_0.3.6       glue_1.8.0         Rcpp_1.1.0         xfun_0.54         
     [45] tidyselect_1.2.1   rstudioapi_0.17.1  knitr_1.50         farver_2.1.2      
-    [49] htmltools_0.5.9    labeling_0.4.3     rmarkdown_2.30     compiler_4.5.2    
-    [53] S7_0.2.1          
+    [49] htmltools_0.5.9    rmarkdown_2.30     compiler_4.5.2     S7_0.2.1          
