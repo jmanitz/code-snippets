@@ -4,7 +4,7 @@ author: "Juliane Manitz"
 date: "`r Sys.Date()`"
 format: 
   gfm:
-    prefer-html: true
+    prefer-html: true  
 editor: visual
 toc: true
 execute:
