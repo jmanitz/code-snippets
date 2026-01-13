@@ -1,6 +1,6 @@
 # Some Small Data Analysis Projects 
 
-## Census Data 
+## US Census Data 
 
 * retrieval and processing of United States Census Bureau data for data scientists, who need to automate the collection of demographic information.
 * Combine different data sources / R packages `tigris` for US map shapefiles, `tidycensus` for Data from American Community Survey, `censusapi` for US Economic Census Data, and `tidyUSDA` for US Department of Agriculture (USDA) Census Data.
