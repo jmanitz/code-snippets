@@ -2,9 +2,7 @@
 title: "EPA Excess Food Data"
 author: "Juliane Manitz"
 date: "`r Sys.Date()`"
-format: 
-  gfm:
-    prefer-html: true  
+format: gfm
 editor: visual
 toc: true
 execute:
@@ -100,11 +98,12 @@ fmdt |> group_by(NAICS4) |>
   theme(axis.text.x = element_text(angle = 45, hjust = 0.9)) + 
   labs(y="Excess Food (TPY)", x="")
 
-fmdt |> group_by(NAICS6) |>
-  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm=TRUE) |> round(0)) |>
-  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
-            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
-            columns = list(NAICS6 = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
+# Tables are not shown in md
+# fmdt |> group_by(NAICS6) |>
+#  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm=TRUE) |> round(0)) |>
+#  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
+#            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
+#            columns = list(NAICS6 = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
 ```
 
 ## Map Fruit/Veg Preservation
@@ -126,8 +125,7 @@ vegdt <- fmdt |> filter(!state %in% c("AK", "HI", "PR")) |>
 {ggplot() + theme_void() + 
   geom_sf(data = smap, color="lightgray", fill="whitesmoke") +      
   geom_sf(data = vegdt, aes(size = ExcessFood, text=lbl), color="#29AF7FFF", shape=20, alpha=0.6) +
-  labs(title = "EPA Fruit/Veg Preservation")} |>
-  ggplotly(tooltip = "text")
+  labs(title = "EPA Fruit/Veg Preservation")} #|>  ggplotly(tooltip = "text")
 ```
 
 ## Top Company Names
@@ -135,15 +133,21 @@ vegdt <- fmdt |> filter(!state %in% c("AK", "HI", "PR")) |>
 Note that when preprocessing the data, the company names provided by EPA have been cleaned by removing special characters, trailing 's and non-informative name additions like 'Co.', 'Inc.', 'LLC'.
 
 ```{r}
+#| eval: false
 fmdt |> group_by(Org_Name) |>
   summarize(ExcessFood = sum(ExcessFood, na.rm = TRUE)) |>
   wordcloud2::wordcloud2(rotateRatio=0)
-  
-fmdt |> group_by(Org_Name) |>
-  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm = TRUE) |> round(0)) |>
-  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
-            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
-            columns = list(Org_Name = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
+```
+
+![image](wordcloud.png)
+
+```{r}
+# Tables are not shown in md
+# fmdt |> group_by(Org_Name) |>
+#  summarize(n = n(), ExcessFood = sum(ExcessFood, na.rm = TRUE) |> round(0)) |>
+#  reactable(striped = TRUE, highlight=TRUE, searchable = TRUE, compact=TRUE, 
+#            defaultSorted = "ExcessFood", defaultSortOrder = "desc",
+#            columns = list(Org_Name = colDef(maxWidth=500)), defaultColDef = colDef(maxWidth=125))
 ```
 
 ## Food Waste by State
@@ -158,7 +162,6 @@ fmdt |> group_by(state, NAICS4) |>
   scale_y_continuous(labels = scales::label_comma()) + scale_fill_viridis_d() + 
   theme(axis.text.x = element_text(angle = 45, hjust = 0.9), legend.position = c(.8,.6)) + 
   labs(y="Excess Food (TPY)", x="")
-
 ```
 
 ## Session Information

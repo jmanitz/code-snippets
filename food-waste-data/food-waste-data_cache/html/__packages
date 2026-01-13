@@ -1,0 +1,16 @@
+readxl
+tidyverse
+ggplot2
+tibble
+tidyr
+readr
+purrr
+dplyr
+stringr
+forcats
+lubridate
+reactable
+plotly
+ggchicklet
+sf
+tidygeocoder
