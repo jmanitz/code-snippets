@@ -1,0 +1,389 @@
+---
+title: "Classification Models in Action using the Classical Titanic Dataset"
+author: "Juliane Manitz"
+format: 
+  revealjs: 
+    theme: sky
+    fontsize: 30px
+editor: visual
+---
+
+## Classification
+
+Classification describes the process of predicting a discrete label (category) based on input data.
+
+**Real-World Applications & Impact**
+
+-   **Healthcare:** Medical diagnosis (e.g., "Malignant vs. Benign") - Saving lives through early detection.
+
+-   **Finance:** Credit Scoring & Fraud Detection - Assessing risk and securing global transactions.
+
+-   **Technology:** Spam filtering and sentiment analysis - Curating the digital experience.
+
+## Table of Contents
+
+1. Classical Titanic Dataset
+
+2. Machine Learning Workflow
+
+3. **Decision Tree:** A non-linear, tree-structured approach that recursively splits data based on feature values to form decision rules, offering high interpretability.
+
+4. **Random Forest:** An ensemble method that builds multiple decision trees (a "forest") and takes a majority vote for the final prediction. 
+
+5. More Learning
+
+## Example: Classical Titanic Dataset
+
+On April 15, 1912, during her maiden voyage, the widely considered “unsinkable” RMS Titanic sank after colliding with an iceberg.
+
+```{r}
+require(tidyverse)
+require(titanic)
+library(ggbeeswarm)
+require(tidymodels)
+
+dt <- titanic_train |> 
+  # select(Survived, Pclass, Sex, Age, SibSp, Parch, Fare, Embarked) |> 
+  mutate(
+    Survived = factor(Survived, levels = c(1, 0), labels = c("Survived", "Died")),
+    Pclass   = factor(Pclass),
+    Sex      = factor(Sex)
+  )
+```
+
+:::::: columns
+:::: {.column width="20%"}
+::: {style="font-size: 0.6em;"}
+**Key Variables:**
+
+-   `Survived`: 0 = No, 1 = Yes
+-   `Pclass`: Ticket class (1st, 2nd, 3rd)
+-   `Sex`: Male/Female
+-   `Age`: Age in years
+-   `SibSp`: Number of siblings/spouses aboard
+-   `Parch`: Number of parents/children aboard
+-   `Fare`: Passenger fare
+:::
+::::
+
+::: {.column width="80%"}
+```{r}
+# ggplot(dt, aes(x = Age, y = Fare, color=factor(Pclass))) + 
+#   geom_point(size=2) + scale_y_sqrt() + 
+#   labs(title="Age vs. Fare by Sex") + theme_minimal()
+
+ggplot(dt, aes(y = Age, x = Pclass, color = Sex)) +
+  geom_boxplot(aes(color = NULL)) + scale_y_sqrt() + 
+  geom_beeswarm(alpha = 0.6, priority = 'descending', corral = "random") +
+  labs(title="Age Distribution by Ticket Class and Sex",
+       x="Ticket class", y="Age (sqrt scale)", fill = "Sex") + 
+  theme_minimal()
+```
+
+```{r}
+#| eval: false
+skimr::skim(dt)
+```
+:::
+::::::
+
+## Survival: Women and Children First?
+
+**Question:** Unfortunately, there weren’t enough lifeboats for everyone on board. What sorts of people were more likely to survive?
+
+::::: columns
+::: {.column width="60%"}
+```{r, fig.width=6, fig.height=4.5}
+ggplot(dt, aes(x = Age, fill = Survived)) +
+  geom_density(alpha=0.5) +
+  labs(title="Survival by Age Distribution") + theme_minimal()
+```
+:::
+
+::: {.column width="40%"}
+```{r, fig.width=4.5, fig.height=5}
+ggplot(dt, aes(x = Sex, fill = Survived)) +
+  geom_bar(position = "fill") +
+  labs(title="Survival by Sex",
+       x="Sex", y="Proportion", fill = "Survived") + 
+  theme_minimal()
+```
+:::
+:::::
+
+## Survival: ... Or Rich People First?
+
+**Question:** Unfortunately, there weren’t enough lifeboats for everyone on board. What sorts of people were more likely to survive?
+
+```{r}
+ggplot(dt, aes(x = Pclass, fill = Survived)) +
+  geom_bar(position = "fill") +
+  labs(title="Survival by Passenger Class",
+       x="Passenger Class", y="Proportion", fill = "Survived") + 
+  theme_minimal()
+```
+
+## Machine Learning Workflow
+
+::::: columns
+::: {.column width="40%"}
+1.  Data Splitting & Cleaning
+2.  Feature Engineering (where the "science" happens).
+3.  Model Training & Selection.
+4.  Validation & Evaluation.
+5.  Deploy & Monitor  
+:::
+
+::: {.column width="60%"}
+![](/img/ml_workflow.PNG)
+[^1] 
+:::
+:::::
+
+[^1]:  Source: <https://towardsdatascience.com/the-machine-learning-workflow-explained-557abf882079/>
+
+## Data Splitting
+
+The accuracy of an estimate $\hat f(x)$ depends on reducible and irreducible error:
+
+$$\text{E}(y - \hat f(x))^2 = |f(x) - \hat f(x)|^2 + Var(\epsilon)$$
+
+::::: columns
+::: {.column width="50%"}
+Machine Learning (ML) uses dataset splits into training and test datasets to find the optimal model.
+
+-   Training: preprocess variables, tune (hyper-)parameters, ...
+-   Test: get *one* unbiased assessment of model performance
+:::
+
+::: {.column width="50%"}
+![](/img/ml_eval.PNG)
+:::
+:::::
+
+
+<!-- ## Missing Data Imputation -->
+
+<!-- ```{r} -->
+
+<!-- visdat::vis_dat(dt) -->
+
+<!-- ``` -->
+
+## Data Preparation
+
+::::: columns
+::: {.column width="50%"}
+### Data Splitting
+
+Split our dataset in two, one dataset for training and the other one for testing. 
+
+```{r}
+#| echo: true
+
+set.seed(1234)
+
+spl <- dt |> 
+  select(Survived, Pclass, Sex, Age, 
+         SibSp, Parch, Fare, Embarked) |> 
+  initial_split(dt, prop = 0.8, 
+                strata = "Survived")
+
+train <- training(spl)
+test <- testing(spl)
+```
+:::
+
+::: {.column width="50%"}
+### Data Cleaning
+
+<!-- Let’s create a recipe to define the preprocessing steps  -->
+
+```{r}
+#| echo: true
+
+rf_rec <- 
+  # Define classification variables
+  recipe(Survived ~ ., data = train) |>
+  # Missing value imputation
+  step_impute_median(all_numeric()) |>
+  # Factor handing: split into binary terms
+  step_dummy(all_nominal_predictors()) |>
+  # execute transformation
+  prep()
+
+# Extract imputed training data 
+train_dt <- juice(rf_rec)
+
+# Apply pre-processing to test data
+test_dt  <- bake(rf_rec, new_data = test) |> 
+  as.data.frame()
+```
+:::
+:::
+
+## Decision Tree
+
+<!-- A non-linear, tree-structured approach that recursively splits data based on feature values to form decision rules, offering high interpretability. -->
+
+::::: columns
+::: {.column width="50%"}
+1.  Find optimal split that achieves the highest purity
+2.  The prediction is obtained as by majority vote in each region
+3.  Repeat process within each of the resulting regions
+4.  Stopping criterion, e.g. \< 5 observation in each region
+5.  Apply weakest link pruning is used to avoid overfitting
+:::
+
+::: {.column width="50%"}
+```{r, fig.height=5, fig.width=5}
+tree <- rpart::rpart(Survived ~., data = train)
+rpart.plot::rpart.plot(tree)
+```
+:::
+:::::
+
+## Ensemble Method: Bagging
+
+<!-- Low level of prediction performance by a single tree can be substantially improved by aggregation (ensemble methods) -->
+
+**B**ootstrap **agg**regat**ing** is a general-purpose procedure designed to improve stability and accuracy
+
+::::: columns
+::: {.column width="50%"}
+- Generate $B$ bootstrapped datasets of size $n$ (with resampling)
+- Train the method on each subset and obtain prediction $\hat f^{*b}(x)$ at a point $x$. 
+- Then, average all the predictions for this point $x$: $\hat f_{bag}(x) = \frac{1}{B} \sum_b \hat f^{*b}(x)$
+:::
+::: {.column width="50%"}
+![](/img/bagging.PNG)
+[^*]
+
+[^*]: Source: <https://pub.towardsai.net/bagging-vs-boosting-the-power-of-ensemble-methods-in-machine-learning-6404e33524e6>
+:::
+:::
+
+<!-- ## From Bagging Trees to Random Forests -->
+
+<!-- **Bagging trees** -->
+
+<!-- Construct $B$ trees using bootstrapped datasets. Each tree is grown deep and not pruned:  -->
+
+<!-- - Results in high variance and low bias -->
+<!-- - Different features than the original with variation in number of terminal nodes -->
+
+<!-- **Random forests** select at each candidate split a random subset of features ($m < \sqrt{p}$) -->
+
+<!-- - Strong predictors are selected less often, which reduces correlation between bootstrapped trees -->
+<!-- - Larger variance reduction of decorrelated trees -->
+
+
+## Random Forest
+
+::::: columns
+::: {.column width="55%"}
+**Bagging trees** Construct $B$ trees using bootstrapped datasets. Each tree is grown deep and not pruned
+ 
+**Random forests** select at each candidate split a random subset of features ($m < \sqrt{p}$)
+
+```{r}
+#| echo: true
+
+# Model specification
+rf_model <- 
+  # Define model + parameter
+  rand_forest(trees = 2000, mtry = 3) |> 
+  set_engine("ranger", importance="permutation") |>
+  # Set binary response
+  set_mode("classification")  
+
+# Model fit
+rf_fit <- rf_model %>% 
+  fit(Survived ~ ., data = train_dt)
+```
+:::
+::: {.column width="45%"}
+```{r, fig.height=5.7, fig.width=5}
+# Variable importance
+rf_fit %>%
+  vip::vip(geom="point", num=20) 
+```
+:::
+:::
+
+## Evaluate performance
+
+::: columns
+::: {.column width="50%"}
+```{r}
+#| echo: true
+
+# Obtaining predictions
+rf_pred <- rf_fit %>%
+  predict(test_dt) %>%
+  bind_cols(test_dt)
+
+# evaluate prediction (yardstick)
+rf_pred %>% 
+  conf_mat(truth=Survived, estimate=.pred_class)
+```
+
+AUC / ROC
+```{r}
+#| echo: true
+rf_probs <- rf_fit %>%
+  predict(test_dt, type="prob") %>%
+  bind_cols(test_dt)
+AUC <- rf_probs %>% 
+  roc_auc(Survived, .pred_Survived)
+```
+<!-- # rf_pred %>% metric_set(accuracy, sens, spec)(truth=Survived, estimate=.pred_class)  -->
+:::
+
+::: {.column width="50%"}
+```{r, fig.height=5, fig.width=5}
+rf_probs %>% roc_curve(Survived, .pred_Survived) %>% 
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) +
+  geom_path() + geom_abline(lty = 3) +
+  coord_equal() + 
+  geom_text(aes(x=0.3, y=0.7,label = paste("AUC = ", round(AUC$.estimate,3)))) + 
+  theme_minimal()
+```
+:::
+:::
+
+## Other Classification Approaches
+
+-   **Logistic Regression:** A linear model for binary classification that estimates the probability of a data point belonging to a particular class using the sigmoid function.
+
+-   **K-Nearest Neighbor:** A simple, distance-based "lazy learner" that classifies data based on the majority class of its (k) closest neighbors.
+
+-   **Naive Bayes:** A probabilistic classifier based on Bayes' Theorem.
+
+-   **Gradient Boosting:** Sequential ensemble techniques that build trees to correct previous errors.
+
+-   **Support Vector Machines:** Finds the optimal hyperplane to maximize the margin between different classes.
+
+-   **Artificial Neural Networks:** Deep learning models through interconnected layers, suitable for complex pattern recognition.
+
+## Further Reading & Exercises
+
+::: columns
+::: {.column width="50%"}
+
+James, Witten, Hastie and Tibshirani. An Introduction to Statistical Learning (**R/Python**) 
+
+```{=html}
+<iframe width="780" height="500" src="https://www.statlearning.com/" title="PDF’s available online"></iframe>
+```
+:::
+
+::: {.column width="50%"}
+<!-- ![](/img/book.PNG) -->
+Kuhn and Silge. **Tidy Modeling with R**: A Framework for Modeling in the Tidyverse.
+```{=html}
+<iframe width="780" height="500" src="https://www.tmwr.org/" title="Available online"></iframe>
+```
+:::
+:::
+

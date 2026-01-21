@@ -1,8 +1,16 @@
 # Some Small Data Analysis Projects 
 
+## Classification using Titanic Data
+
+* Decision Trees and Random forest to predict survival probability
+
+## Mapping US Food Waste 
+
+* Exploring EPA "Excess Food" data to see how food waste is generated across various areas and industries
+
 ## US Census Data 
 
-* retrieval and processing of United States Census Bureau data for data scientists, who need to automate the collection of demographic information.
+* Retrieval and processing of United States Census Bureau data for data scientists, who need to automate the collection of demographic information.
 * Combine different data sources / R packages `tigris` for US map shapefiles, `tidycensus` for Data from American Community Survey, `censusapi` for US Economic Census Data, and `tidyUSDA` for US Department of Agriculture (USDA) Census Data.
 
 ## Ocean Capstone
